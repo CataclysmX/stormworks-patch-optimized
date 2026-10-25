@@ -1,0 +1,14 @@
+stwpatch for Windows
+
+1. Close Stormworks.
+2. Extract the whole archive (anywhere, even into the game folder: the patch files
+   are named stwpatch_*.dll and never overwrite a game file), then double-click install.bat (Steam folder found automatically), or run:
+     install.bat "D:\SteamLibrary\steamapps\common\Stormworks"
+   Add "server" at the end to also patch the dedicated server (server64.exe, via opengl32.dll).
+   steam_api64.dll is NEVER modified: the game checks it (anti-piracy).
+3. Play. Logs: stwpatch.log, stwpatch_physics_peak.txt in the game folder.
+
+If the game crashes: start it once more (it starts in SAFE MODE, without patches,
+after a crash during startup), then send stwpatch.log and crash.dmp from the game folder.
+If Windows Defender removes OpenAL64.dll, add an exclusion for the game folder.
+uninstall.bat restores the original DLLs.
