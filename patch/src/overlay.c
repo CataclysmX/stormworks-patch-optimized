@@ -4,8 +4,10 @@
  * It is a separate topmost, layered, click-through window that never takes the focus (the game
  * keeps keyboard and mouse), drawn with GDI: no hook in the game's renderer, so it works the same
  * with Vulkan or OpenGL, under Proton or on Windows. Not visible over an exclusive fullscreen
- * mode on Windows (use borderless). The key is read with GetAsyncKeyState and only counts while
- * the game window is in the foreground; the panel hides itself when the game loses the focus. */
+ * mode on Windows (use borderless). The key comes from a low-level keyboard hook (the game reads
+ * raw input: under Proton GetAsyncKeyState never sees its keys), with GetAsyncKeyState as a
+ * fallback, and only counts while the game window is in the foreground; the panel hides itself
+ * when the game loses the focus. */
 #include "stwpatch.h"
 #include <psapi.h>
 #include <mimalloc.h>
@@ -13,8 +15,9 @@
 #include <stdio.h>
 #include <string.h>
 
-#define TICK_MS     250
-#define STATS_TICKS 4                   /* figures recomputed every second */
+#define TICK_MS     40                  /* key polling: a tap lasts ~100 ms */
+#define DRAW_TICKS  6                   /* panel redrawn every 240 ms */
+#define STATS_TICKS 25                  /* figures recomputed every second */
 #define MAX_LINES   20
 #define LINE_LEN    200
 #define PAD         8
@@ -205,6 +208,22 @@ static LRESULT CALLBACK panel_proc(HWND h, UINT msg, WPARAM wp, LPARAM lp)
     return DefWindowProcA(h, msg, wp, lp);
 }
 
+static volatile LONG key_presses;      /* key-down events seen by the low-level hook */
+
+static LRESULT CALLBACK keyboard_ll(int code, WPARAM wp, LPARAM lp)
+{
+    static int down;
+    if (code == HC_ACTION) {
+        KBDLLHOOKSTRUCT *k = (KBDLLHOOKSTRUCT *)lp;
+        if ((int)k->vkCode == g_cfg.overlay_vk) {
+            int is_down = wp == WM_KEYDOWN || wp == WM_SYSKEYDOWN;
+            if (is_down && !down) InterlockedIncrement(&key_presses);   /* not the auto-repeat */
+            down = is_down;
+        }
+    }
+    return CallNextHookEx(NULL, code, wp, lp);
+}
+
 static int game_focused(void)
 {
     HWND f = GetForegroundWindow();
@@ -231,9 +250,15 @@ static DWORD WINAPI overlay_thread(LPVOID arg)
     font = CreateFontA(-15, 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
                        CLEARTYPE_QUALITY, FIXED_PITCH | FF_MODERN, "Consolas");
     SetTimer(panel, 1, TICK_MS, NULL);
-    log_printf("overlay: ready, toggle with F%d while the game has the focus", g_cfg.overlay_vk - VK_F1 + 1);
+    HMODULE self = NULL;
+    GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                       (LPCSTR)keyboard_ll, &self);
+    HHOOK hook = SetWindowsHookExA(WH_KEYBOARD_LL, keyboard_ll, self, 0);
+    log_printf("overlay: ready, toggle with F%d while the game has the focus (keyboard hook %s)",
+               g_cfg.overlay_vk - VK_F1 + 1, hook ? "on" : "FAILED, polling only");
 
-    int was_down = 0, tick = 0;
+    int was_down = 0, tick = 0, n_toggles = 0, n_unfocused = 0;
+    LONG seen_presses = 0;
     MSG m;
     while (GetMessageA(&m, NULL, 0, 0) > 0) {
         if (m.message != WM_TIMER) { TranslateMessage(&m); DispatchMessageA(&m); continue; }
@@ -244,19 +269,38 @@ static DWORD WINAPI overlay_thread(LPVOID arg)
             if (!game_wnd) continue;
         }
         int focused = game_focused();
-        int down = (GetAsyncKeyState(g_cfg.overlay_vk) & 0x8000) != 0;
-        if (down && !was_down && focused) {
+        /* hook presses, else bit 15 (down now) / bit 0 (pressed since the previous call) */
+        LONG presses = key_presses;
+        SHORT ks = GetAsyncKeyState(g_cfg.overlay_vk);
+        int down = (ks & 0x8000) != 0;
+        int pressed = presses != seen_presses || (down && !was_down) || (ks & 1);
+        seen_presses = presses;
+        if (pressed && !focused && n_unfocused++ < 3) {
+            HWND f = GetForegroundWindow();
+            DWORD pid = 0;
+            if (f) GetWindowThreadProcessId(f, &pid);
+            log_printf("overlay: key seen but the game is not in the foreground (foreground %p, pid %lu; game %p)",
+                       (void *)f, pid, (void *)game_wnd);
+        }
+        if (pressed && focused) {
             shown = !shown;
             tick = 0;
+            if (n_toggles++ < 4) {
+                RECT r;
+                GetClientRect(game_wnd, &r);
+                log_printf("overlay: %s (game window %ldx%ld)", shown ? "shown" : "hidden", r.right, r.bottom);
+            }
         }
         was_down = down;
         if (!shown || !focused) {
             if (IsWindowVisible(panel)) ShowWindow(panel, SW_HIDE);
             continue;
         }
-        if (tick++ % STATS_TICKS == 0) refresh_text();
-        layout();
-        InvalidateRect(panel, NULL, FALSE);
+        if (tick % STATS_TICKS == 0) refresh_text();
+        if (tick++ % DRAW_TICKS == 0) {
+            layout();
+            InvalidateRect(panel, NULL, FALSE);
+        }
     }
     return 0;
 }
