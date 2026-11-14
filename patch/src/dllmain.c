@@ -108,6 +108,7 @@ static void read_config(const char *dir)
     if (g_cfg.heap_report_sec < 5) g_cfg.heap_report_sec = 5;
     g_cfg.safe_mode           = GetPrivateProfileIntA("misc", "safe_mode", 1, ini);
     g_cfg.sampler_ms          = GetPrivateProfileIntA("profile", "sampler_ms", 0, ini);
+    g_cfg.fix_editor_mirror   = GetPrivateProfileIntA("fixes", "editor_mirror_delete", 1, ini);
     GetPrivateProfileStringA("misc", "version_suffix", "Cata-ptimised", g_cfg.version_suffix, sizeof g_cfg.version_suffix, ini);
     g_cfg.net_monitor         = GetPrivateProfileIntA("network", "monitor", 1, ini);
     g_cfg.net_send_buffer_kb  = GetPrivateProfileIntA("network", "send_buffer_kb", 4096, ini);
@@ -192,6 +193,7 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
     if (g_cfg.sampler_ms) sampler_install();
     if (g_cfg.net_monitor) net_install();
     if (!is_server) branding_install();
+    if (!is_server && g_cfg.fix_editor_mirror) editor_fix_install();
     crashguard_stage("game-start");
     HANDLE h = CreateThread(NULL, 0, late_init, NULL, 0, NULL);
     if (h) CloseHandle(h);

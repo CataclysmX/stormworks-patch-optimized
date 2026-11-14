@@ -152,6 +152,12 @@ The server doesn't import OpenAL64 → the `steam_api64.dll` proxy (same code). 
   had already freed. mimalloc decommits freed pages after 10 ms (the Windows heap keeps them), so the
   game's latent use-after-free became a crash. mimalloc now never purges (`[memory] allocator_purge=0`);
   `allocator=system` turns mimalloc off entirely.
+* The use-after-free itself (`editor_fix.c`, `[fixes] editor_mirror_delete=1`): `exe+0x7f9b73` is in
+  `c_game_state_vehicle_editor` vtable slot 12 (FUN_1407f6c10). Deleting parts with symmetry on, it
+  deletes the mirrored part (FUN_1404c2a80 → FUN_1404ac3d0 → the part's deleting destructor), then
+  reads `part+0x58` (its definition) from the freed object for FUN_14080c1c0. Two sites (selection:
+  `r14`, single part: `rdi`), found by byte pattern; the patch loads the definition into that
+  callee-saved register before the delete and passes it after: same calls, same order.
 * Windows: `dist/windows/` (`install.bat` / `uninstall.bat`, guards on DLL sizes) and `dist/stwpatch-windows.zip`.
 
 ## Multiplayer (in-game hosting): "slow" / "desynced" players

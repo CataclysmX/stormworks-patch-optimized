@@ -52,6 +52,7 @@ typedef struct {
     char version_suffix[64];  /* appended to the main-menu version label, "" = off */
     int sampler_ms;           /* 0 = off; sampling period of the loading profiler */
     int safe_mode;            /* 1 = after a crash during startup, next launch runs unpatched */
+    int fix_editor_mirror;    /* 1 = fix the editor's use-after-free when deleting with symmetry */
 } stw_config;
 
 extern stw_config g_cfg;
@@ -70,6 +71,7 @@ int  narrowphase_install(void);
 int  sampler_install(void);
 int  net_install(void);
 int  branding_install(void);
+int  editor_fix_install(void);
 extern volatile ULONGLONG g_last_tick_ms;
 extern volatile DWORD g_tick_tid;     /* the game thread that ticks (waits on physics) */
 extern ULONGLONG g_start_ms;   /* GetTickCount64() when the DLL loaded */
