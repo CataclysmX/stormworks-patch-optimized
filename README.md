@@ -147,6 +147,14 @@ The server doesn't import OpenAL64 → the `steam_api64.dll` proxy (same code). 
   runs in **safe mode** (no patches) and says so (`[misc] safe_mode=1`). For an access violation it
   also logs whether the faulting address is committed / decommitted / released and inside the
   mimalloc heap, every general register, and the 32 code bytes around `rip`.
+* Crash of 2026-11-14 12:24 (v1.1, `sampler_ms=2`, during a world load), caused by stwpatch: the
+  sampler unwound a game thread that was exiting; its rsp pointed into its already decommitted
+  stack, `RtlVirtualUnwind` faulted (`ntdll+0x3965c`, read of `0x5070730`). Logging that fault,
+  crashguard's stack scan read past the top of the sampler thread's stack (`OpenAL64.dll+0x768b`
+  = `veh`, read of `0x1fc0000`) and that second fault crashed the game. Fixed: the scan stops at
+  the end of the committed region holding the stack; the sampler unwinds under a guard (its own
+  first vectored handler resumes an access violation of the sampler thread at an escape that
+  drops the sample; `test/sampler_test.c` runs a thread whose rsp is in reserved memory).
 * Allocator: crash of 2026-11-08 (build of 2026-10-29), main thread at `stormworks64.exe+0x7f9b73`,
   read of `0x29a86510e18`: an address in mimalloc's 2-6 TiB range, i.e. the game read a heap block it
   had already freed. mimalloc decommits freed pages after 10 ms (the Windows heap keeps them), so the
@@ -242,6 +250,16 @@ pointers, texture binds, programs; F3 line and stwpatch.log every 30 s. Counting
 SwapBuffers and OPENGL32 glDrawElements / glDrawArrays / glBindTexture through the import table,
 glBindBuffer / glBindVertexArray / glVertexAttribPointer / glUseProgram through a hooked
 wglGetProcAddress (in place before the game creates its context).
+
+`sampler.c`, `[profile] sampler_ms=N` (0 = off; it costs: each watched thread is suspended every
+N ms): stwpatch_sampler.txt, per thread and per class (loading / in game). Stacks are unwound
+up to 48 frames with `RtlVirtualUnwind` and the `.pdata` of every loaded module, looked up
+without locks (modules are referenced so their tables stay mapped); a leaf without unwind
+info returns through `[rsp]`. Report: top 4-frame stacks, leaf functions, **inclusive time**
+(function + callees, self time, most frequent caller), the **hottest instructions** of the top
+self functions, and a **call tree** from the outermost frames (branches >= 1 %). Before this, a
+wait in ntdll was attributed through a scan of the stack for exe return addresses, which picked
+stale ones (shown by the test: a Sleep landed in a deeper function). `test/sampler_test.c`.
 
 ## OpenGL unbind filter (`[misc] gl_filter`)
 

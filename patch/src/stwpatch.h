@@ -72,7 +72,7 @@ extern char g_ini_path[MAX_PATH];   /* stwpatch.ini of this session (menu.c save
 /* Patch version: bump on every release. Shown with the build date after the suffix of the
  * main-menu label ("Cata-ptimised v1.1 (14/11/26 09:45)") and in the log, so a glance tells
  * whether the installed DLL is the latest build. */
-#define STWPATCH_VERSION "1.1"
+#define STWPATCH_VERSION "1.2"
 #ifndef STWPATCH_GIT
 #define STWPATCH_GIT "?"
 #endif

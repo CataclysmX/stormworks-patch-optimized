@@ -95,11 +95,17 @@ static LONG CALLBACK veh(EXCEPTION_POINTERS *ep)
     }
     /* return addresses into the exe or into stwpatch, scanning the stack */
     if (code != EXCEPTION_STACK_OVERFLOW) {
-        uintptr_t *sp = (uintptr_t *)c->Rsp;
+        /* never read past the committed region holding the stack (a fault near the top of a
+         * thread's stack made this scan read beyond StackBase and crash the game, 2026-11-14) */
+        uintptr_t *sp = (uintptr_t *)(c->Rsp & ~(DWORD64)7), *end = sp;
         int shown = 0;
         for (int i = 0; i < 512 && shown < 12; i++) {
-            MEMORY_BASIC_INFORMATION mbi;
-            if (i % 64 == 0 && (!VirtualQuery(sp + i, &mbi, sizeof mbi) || mbi.State != MEM_COMMIT)) break;
+            if (sp + i >= end) {
+                MEMORY_BASIC_INFORMATION mbi;
+                if (!VirtualQuery(sp + i, &mbi, sizeof mbi) || mbi.State != MEM_COMMIT ||
+                    (mbi.Protect & (PAGE_GUARD | PAGE_NOACCESS))) break;
+                end = (uintptr_t *)((uint8_t *)mbi.BaseAddress + mbi.RegionSize);
+            }
             uintptr_t v = sp[i];
             if (in_module((HMODULE)g_base, v) || in_module(self, v)) {
                 describe(v, where, sizeof where);
