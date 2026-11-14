@@ -6,6 +6,7 @@
 
 stw_config g_cfg;
 char g_ini_path[MAX_PATH];
+DWORD g_main_tid;
 uint8_t *g_base;
 const char *g_prefix = "stwpatch";
 ULONGLONG g_start_ms;
@@ -103,6 +104,7 @@ static void read_config(const char *dir)
     g_cfg.compound_split      = GetPrivateProfileIntA("physics", "compound_split", 1, ini);
     g_cfg.gl_stats            = GetPrivateProfileIntA("profile", "gl_stats", 1, ini);
     g_cfg.editor_wireframe    = GetPrivateProfileIntA("editor", "wireframe", 1, ini);
+    g_cfg.fps_cap             = GetPrivateProfileIntA("misc", "fps_cap", 0, ini);
     if (g_cfg.narrow_threads > 32) g_cfg.narrow_threads = 32;
     g_cfg.phys_rate           = GetPrivateProfileIntA("physics", "rate", 0, ini);
     GetPrivateProfileStringA("physics", "budget_ms", "12", buf, sizeof buf, ini);
@@ -200,6 +202,7 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
     if (g_log) fprintf(g_log, "\n======== new session ========\n");
 
     g_start_ms = GetTickCount64();
+    g_main_tid = GetCurrentThreadId();
     g_base = (uint8_t *)GetModuleHandleA(NULL);
     read_config(dir);
     log_printf("stwpatch v%s, git %s, loaded in %s, image base %p, vehicle threads=%d, heap_track=%d",
@@ -233,7 +236,7 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
     if (!is_server && g_cfg.fix_editor_mirror) editor_fix_install();
     if (!is_server) editor_wire_install();
     if (!is_server && (g_cfg.overlay_vk || g_cfg.menu_vk)) overlay_install();
-    if (!is_server && g_cfg.gl_stats) glstats_install();
+    if (!is_server) glstats_install();                  /* frame limiter, OpenGL statistics */
     crashguard_stage("game-start");
     HANDLE h = CreateThread(NULL, 0, late_init, NULL, 0, NULL);
     if (h) CloseHandle(h);

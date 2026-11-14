@@ -8,7 +8,7 @@
 #include <stdio.h>
 #include <string.h>
 
-enum { M_BOOL, M_INT, M_DOUBLE, M_RATE, M_SAVE };
+enum { M_BOOL, M_INT, M_DOUBLE, M_RATE, M_FPS, M_SAVE };
 
 typedef struct {
     const char *label;
@@ -25,6 +25,7 @@ static const item_t items[] = {
     { "   durée avant coupure (s)", M_DOUBLE, &g_cfg.unstick_seconds, 0.2, 10, 0.1, "fixes", "unstick_seconds", 0 },
     { "   rayon maximal du bloc (m)", M_DOUBLE, &g_cfg.unstick_max_radius, 0.5, 30, 0.5, "fixes", "unstick_max_radius", 0 },
     { "Découpage des gros véhicules", M_BOOL, &g_cfg.compound_split, 0, 1, 1, "physics", "compound_split", 0 },
+    { "Limite d'images par seconde", M_FPS, &g_cfg.fps_cap, 0, 0, 0, "misc", "fps_cap", 0 },
     { "Fréquence physique", M_RATE, &g_cfg.phys_rate, 0, 0, 0, "physics", "rate", 0 },
     { "   budget du gouverneur (ms)", M_DOUBLE, &g_cfg.phys_budget_ms, 2, 16.5, 0.5, "physics", "budget_ms", 0 },
     { "Itérations du solveur (0 = jeu)", M_INT, &g_cfg.solver_iterations, 0, 30, 1, "physics", "solver_iterations", 0 },
@@ -42,6 +43,7 @@ static const item_t items[] = {
 #define N_ITEMS ((int)(sizeof items / sizeof items[0]))
 
 static const int rates[] = { -1, 0, 60, 120, 180 };
+static const int fps_caps[] = { 0, 30, 45, 60, 75, 90, 120, 144, 165 };
 static int  dirty;
 static char status[160];
 
@@ -67,6 +69,10 @@ static void value_text(const item_t *it, char *buf, size_t n)
     case M_BOOL:   snprintf(buf, n, "%s", *(int *)it->value ? "OUI" : "non"); break;
     case M_INT:    snprintf(buf, n, "%d", *(int *)it->value); break;
     case M_DOUBLE: snprintf(buf, n, "%.2f", *(double *)it->value); break;
+    case M_FPS:
+        if (*(int *)it->value > 0) snprintf(buf, n, "%d images/s", *(int *)it->value);
+        else snprintf(buf, n, "aucune");
+        break;
     case M_RATE: {
         int r = *(int *)it->value;
         if (r < 0) snprintf(buf, n, "gouverneur stwpatch");
@@ -142,11 +148,15 @@ void menu_change(int i, int dir)
         *(double *)it->value = (double)(long long)(x / it->step + 0.5) * it->step;   /* no 0.30000000004 */
         break;
     }
-    case M_RATE: {
-        int k = 0, n = (int)(sizeof rates / sizeof rates[0]);
-        while (k < n && rates[k] != *(int *)it->value) k++;
+    case M_RATE:
+    case M_FPS: {
+        const int *list = it->kind == M_RATE ? rates : fps_caps;
+        int n = it->kind == M_RATE ? (int)(sizeof rates / sizeof rates[0]) : (int)(sizeof fps_caps / sizeof fps_caps[0]);
+        int k = 0;
+        while (k < n && list[k] != *(int *)it->value) k++;
+        if (k == n) k = 0;
         k = (k + (dir < 0 ? n - 1 : 1)) % n;
-        *(int *)it->value = rates[k];
+        *(int *)it->value = list[k];
         break;
     }
     }

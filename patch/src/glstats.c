@@ -106,8 +106,31 @@ static void WINAPI hk_bind_texture(unsigned target, unsigned texture)
     real_bind_texture(target, texture);
 }
 
+/* frame limiter ([misc] fps_cap, live from the F4 menu): if the game simulates on its render
+ * thread, frames beyond what the screen needs take time from the simulation ticks */
+static void frame_limit(void)
+{
+    static LARGE_INTEGER deadline;
+    int cap = g_cfg.fps_cap;
+    if (cap <= 0) { deadline.QuadPart = 0; return; }
+    LONGLONG period = qpf.QuadPart / cap;
+    LARGE_INTEGER now;
+    QueryPerformanceCounter(&now);
+    if (!deadline.QuadPart || now.QuadPart - deadline.QuadPart > period) deadline = now;   /* late: resync */
+    deadline.QuadPart += period;
+    for (;;) {
+        QueryPerformanceCounter(&now);
+        LONGLONG left = deadline.QuadPart - now.QuadPart;
+        if (left <= 0) break;
+        double ms = left * 1000.0 / qpf.QuadPart;
+        if (ms > 2.0) Sleep((DWORD)(ms - 1.5));             /* 1 ms timer granularity (timeBeginPeriod) */
+        else YieldProcessor();
+    }
+}
+
 static BOOL WINAPI hk_swap(HDC dc)
 {
+    frame_limit();
     LARGE_INTEGER now;
     QueryPerformanceCounter(&now);
     AcquireSRWLockExclusive(&lock);
@@ -181,14 +204,20 @@ static void hook(const char *dll, const char *fn, void *hk, void **real)
 int glstats_install(void)
 {
     QueryPerformanceFrequency(&qpf);
+    hook("GDI32.dll", "SwapBuffers", hk_swap, (void **)&real_swap);    /* frames + frame limiter */
+    if (!real_swap) {
+        log_printf("opengl stats: not installed (SwapBuffers import not found)");
+        return 0;
+    }
+    if (g_cfg.fps_cap > 0) log_printf("frame limiter: %d fps", g_cfg.fps_cap);
+    if (!g_cfg.gl_stats) return 1;
     hook("OPENGL32.dll", "wglGetProcAddress", hk_get_proc, (void **)&real_get_proc);
     hook("OPENGL32.dll", "glDrawElements", hk_draw_elements, (void **)&real_draw_elements);
     hook("OPENGL32.dll", "glDrawArrays", hk_draw_arrays, (void **)&real_draw_arrays);
     hook("OPENGL32.dll", "glBindTexture", hk_bind_texture, (void **)&real_bind_texture);
-    hook("GDI32.dll", "SwapBuffers", hk_swap, (void **)&real_swap);
-    if (!real_get_proc || !real_swap) {
+    if (!real_get_proc) {
         log_printf("opengl stats: not installed (imports not found)");
-        return 0;
+        return 1;
     }
     HANDLE h = CreateThread(NULL, 0, log_thread, NULL, 0, NULL);
     if (h) CloseHandle(h);

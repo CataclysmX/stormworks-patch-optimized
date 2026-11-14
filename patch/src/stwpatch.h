@@ -62,6 +62,7 @@ typedef struct {
     int compound_split;       /* 1 = children of one big compound pair processed in parallel */
     int gl_stats;             /* 1 = count OpenGL calls per frame (overlay, log) */
     int editor_wireframe;     /* 1 = the workbench's wireframe pass (game default), 0 = skipped */
+    int fps_cap;              /* frame limiter in SwapBuffers, 0 = off */
 } stw_config;
 
 extern stw_config g_cfg;
@@ -132,6 +133,7 @@ int  editor_wire_install(void);
 void editor_wire_apply(void);
 extern volatile ULONGLONG g_last_tick_ms;
 extern volatile DWORD g_tick_tid;     /* the game thread that ticks (waits on physics) */
+extern DWORD g_main_tid;              /* the thread that loaded the DLL = the game's main (render) thread */
 extern ULONGLONG g_start_ms;   /* GetTickCount64() when the DLL loaded */
 void narrowphase_format(char *buf, size_t size);
 void unstick_after_dispatch(void *disp);

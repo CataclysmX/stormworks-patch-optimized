@@ -313,7 +313,9 @@ static void hook_wait(uint8_t *task)
     ULONGLONG now = GetTickCount64();
     if (!g_last_tick_ms) {
         if (!start_ms) start_ms = g_start_ms;
-        log_printf("loading: first game tick %.1f s after launch", (now - start_ms) / 1000.0);
+        log_printf("loading: first game tick %.1f s after launch (simulation thread %lu: %s)", (now - start_ms) / 1000.0,
+                   GetCurrentThreadId(), GetCurrentThreadId() == g_main_tid ? "the render thread"
+                                                                             : "not the render thread");
         crashguard_stage("stable");             /* startup survived: no safe mode on the next launch */
     } else if (now - g_last_tick_ms >= 1500) {
         log_printf("loading: %.1f s without game tick (save / vehicle loading or freeze)", (now - g_last_tick_ms) / 1000.0);
