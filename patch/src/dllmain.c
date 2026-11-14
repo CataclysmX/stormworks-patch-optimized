@@ -105,6 +105,7 @@ static void read_config(const char *dir)
     g_cfg.gl_stats            = GetPrivateProfileIntA("profile", "gl_stats", 1, ini);
     g_cfg.editor_wireframe    = GetPrivateProfileIntA("editor", "wireframe", 1, ini);
     g_cfg.fps_cap             = GetPrivateProfileIntA("misc", "fps_cap", 0, ini);
+    g_cfg.gl_filter           = GetPrivateProfileIntA("misc", "gl_filter", 1, ini);
     if (g_cfg.narrow_threads > 32) g_cfg.narrow_threads = 32;
     g_cfg.phys_rate           = GetPrivateProfileIntA("physics", "rate", 0, ini);
     GetPrivateProfileStringA("physics", "budget_ms", "12", buf, sizeof buf, ini);

@@ -33,7 +33,11 @@ build/opengl32.dll: $(SRC) src/stwpatch.h src/opengl32_forward.c src/opengl32_th
 	$(CC) $(CFLAGS) -o $@ $(SRC) build/mimalloc.o src/opengl32_forward.c src/opengl32_thunks.S src/opengl32.def $(LDFLAGS) $(LIBS)
 
 # tests: build/narrow_test.exe (run with wine), build/unstick_test (native Linux)
-tests: build/narrow_test.exe build/unstick_test build/overlay_test.exe build/compound_test.exe
+tests: build/narrow_test.exe build/unstick_test build/overlay_test.exe build/compound_test.exe build/glfilter_test.exe
+
+build/glfilter_test.exe: test/glfilter_test.c src/glstats.c src/stwpatch.h
+	mkdir -p build
+	$(CC) -O2 -Wall -std=gnu11 -Isrc -o $@ test/glfilter_test.c -lopengl32 -lgdi32 -luser32
 
 build/compound_test.exe: test/compound_test.c src/compound.c src/stwpatch.h
 	mkdir -p build

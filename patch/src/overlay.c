@@ -136,10 +136,10 @@ static void refresh_text(void)
         gl_live(&g);
         double f = (double)(g.frames - pg.frames);
         if (pt && f > 0)
-            add(WHITE, "OpenGL       %.0f fps   %.0f draws/frame   %.0f buffer binds (%.0f%% removable)   %.0f texture binds",
+            add(WHITE, "OpenGL       %.0f fps   %.0f draws/frame   %.0f buffer binds (%.0f%% removable, %.0f not sent)   %.0f texture binds",
                 f / sec, (g.draws - pg.draws) / f, (g.binds - pg.binds) / f,
                 g.binds > pg.binds ? 100.0 * ((g.redundant - pg.redundant) + (g.unbind - pg.unbind)) / (g.binds - pg.binds) : 0.0,
-                (g.textures - pg.textures) / f);
+                (g.elided - pg.elided) / f, (g.textures - pg.textures) / f);
         pg = g;
     }
     if (g_cfg.vehicle_threads > 0)

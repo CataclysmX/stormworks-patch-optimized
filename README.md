@@ -243,6 +243,22 @@ SwapBuffers and OPENGL32 glDrawElements / glDrawArrays / glBindTexture through t
 glBindBuffer / glBindVertexArray / glVertexAttribPointer / glUseProgram through a hooked
 wglGetProcAddress (in place before the game creates its context).
 
+## OpenGL unbind filter (`[misc] gl_filter`)
+
+Measured per frame: ~62 600 glBindBuffer in the workbench and ~44 500 in game, half of them
+`glBindBuffer(target, 0)` right before another bind of that target. `glstats.c` keeps those
+unbinds pending (per thread) instead of sending them: the next bind of the target cancels it
+(and is skipped as well when it binds the buffer the driver still has bound); any GL call that
+could depend on ARRAY / ELEMENT_ARRAY buffer bindings applies it first. Every GL function the game
+gets (OPENGL32 imports, wglGetProcAddress results) goes through a generated thunk ("nothing
+pending: jump to the real function", else save rcx/rdx/r8/r9/xmm0-3, apply, restore, jump), except
+functions that cannot depend on these bindings (uniforms, textures, render states, attribute
+enables), so that the unbind survives the per-mesh uniform calls. VAO binds, buffer deletions and
+context switches also forget the driver's bindings. Switchable live in F4. `test/glfilter_test.c`
+(Wine, real driver): binding queries after a kept-back unbind, transparent calls, element buffer,
+VAOs, client-side attribute pointer, live switch, and 200 triangles drawn with the game's pattern
+giving identical pixels with and without the filter (806 of 822 binds not sent).
+
 ## Workbench: wireframe pass (`[editor] wireframe`)
 
 Sampler in the workbench (2026-11-14): main thread 71 % in OpenGL, top caller FUN_140680c00

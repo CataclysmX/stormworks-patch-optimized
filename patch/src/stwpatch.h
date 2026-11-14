@@ -9,7 +9,7 @@ typedef struct {
     uint8_t *vt_dispatcher, *vt_hashed_cache, *vt_softrigid, *vt_discrete;
     uint8_t *vt_vehicle_tick, *vt_scene_update;
     uint8_t *vt_compound_algo, *vt_manifold_result;   /* compound split (compound.c) */
-    int narrow_hook_on, compound_split_on, editor_wire_on;   /* hooks installed this session (menu.c) */
+    int narrow_hook_on, compound_split_on, editor_wire_on, gl_filter_on;   /* hooks installed this session (menu.c) */
     uint8_t *step_simulation, *default_near;
     uint8_t *thread_enqueue, *task_wait, *task_set_state, *mtx_lock, *mtx_unlock, *cnd_broadcast;
     void *prof_start, *prof_stop;           /* Start_Profile(name) / Stop_Profile() */
@@ -63,6 +63,7 @@ typedef struct {
     int gl_stats;             /* 1 = count OpenGL calls per frame (overlay, log) */
     int editor_wireframe;     /* 1 = the workbench's wireframe pass (game default), 0 = skipped */
     int fps_cap;              /* frame limiter in SwapBuffers, 0 = off */
+    int gl_filter;            /* 1 = useless glBindBuffer(target, 0) calls not sent */
 } stw_config;
 
 extern stw_config g_cfg;
@@ -100,7 +101,7 @@ extern char g_last_exception[192];
 int  overlay_install(void);
 int  compound_split_install(void);
 typedef struct {
-    long long frames, draws, binds, redundant, unbind, attrib, programs, textures;
+    long long frames, draws, binds, redundant, unbind, attrib, programs, textures, elided;
     double frame_ms;                                  /* cumulative */
 } gl_live_t;
 int  glstats_install(void);

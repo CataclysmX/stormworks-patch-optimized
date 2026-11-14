@@ -30,6 +30,7 @@ static const item_t items[] = {
     { "   rayon maximal du bloc (m)", M_DOUBLE, &g_cfg.unstick_max_radius, 0.5, 30, 0.5, "fixes", "unstick_max_radius", 0, 3 },
     { "Découpage des gros véhicules", M_BOOL, &g_cfg.compound_split, 0, 1, 1, "physics", "compound_split", 0, 1 },
     { "Limite d'images par seconde", M_FPS, &g_cfg.fps_cap, 0, 0, 0, "misc", "fps_cap", 0, 0 },
+    { "OpenGL : supprimer les déliaisons inutiles", M_BOOL, &g_cfg.gl_filter, 0, 1, 1, "misc", "gl_filter", 0, 1 },
     { "Fréquence physique", M_RATE, &g_cfg.phys_rate, 0, 0, 0, "physics", "rate", 0, -1 },
     { "   budget du gouverneur (ms)", M_DOUBLE, &g_cfg.phys_budget_ms, 2, 16.5, 0.5, "physics", "budget_ms", 0, 12 },
     { "Itérations du solveur (0 = jeu)", M_INT, &g_cfg.solver_iterations, 0, 30, 1, "physics", "solver_iterations", 0, 0 },
@@ -64,6 +65,7 @@ static int needs_restart(const item_t *it)
     if (!strncmp(it->key, "narrowphase_", 12)) return !g_addr.narrow_hook_on;
     if (it->value == &g_cfg.alloc_purge) return !g_cfg.fast_alloc;
     if (it->value == &g_cfg.editor_wireframe) return !g_addr.editor_wire_on;
+    if (it->value == &g_cfg.gl_filter) return !g_addr.gl_filter_on;
     return 0;
 }
 
