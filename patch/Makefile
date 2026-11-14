@@ -39,7 +39,7 @@ build/compound_test.exe: test/compound_test.c src/compound.c src/stwpatch.h
 	mkdir -p build
 	$(CC) -O2 -Wall -std=gnu11 -Isrc -o $@ test/compound_test.c
 
-build/overlay_test.exe: test/overlay_test.c src/overlay.c src/stwpatch.h
+build/overlay_test.exe: test/overlay_test.c src/overlay.c src/menu.c src/stwpatch.h
 	mkdir -p build
 	$(CC) -O2 -Wall -std=gnu11 -Isrc -I$(MI)/include -o $@ test/overlay_test.c -lpsapi -luser32 -lgdi32
 

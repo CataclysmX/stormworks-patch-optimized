@@ -17,28 +17,32 @@ typedef struct {
     double min, max, step;
     const char *section, *key;
     int restart;                  /* 1 = applies at the next launch */
+    double def;                   /* value of a fresh install (stwpatch.ini template); AUTO_THREADS_* = computed */
 } item_t;
 
+#define AUTO_VEHICLE_THREADS -1001
+#define AUTO_NARROW_THREADS  -1002
+
 static const item_t items[] = {
-    { "Roues / blocs coincés sous la map", M_BOOL, &g_cfg.unstick, 0, 1, 1, "fixes", "unstick", 0 },
-    { "   profondeur minimale (m)", M_DOUBLE, &g_cfg.unstick_depth, 0.05, 2, 0.05, "fixes", "unstick_depth", 0 },
-    { "   durée avant coupure (s)", M_DOUBLE, &g_cfg.unstick_seconds, 0.2, 10, 0.1, "fixes", "unstick_seconds", 0 },
-    { "   rayon maximal du bloc (m)", M_DOUBLE, &g_cfg.unstick_max_radius, 0.5, 30, 0.5, "fixes", "unstick_max_radius", 0 },
-    { "Découpage des gros véhicules", M_BOOL, &g_cfg.compound_split, 0, 1, 1, "physics", "compound_split", 0 },
-    { "Limite d'images par seconde", M_FPS, &g_cfg.fps_cap, 0, 0, 0, "misc", "fps_cap", 0 },
-    { "Fréquence physique", M_RATE, &g_cfg.phys_rate, 0, 0, 0, "physics", "rate", 0 },
-    { "   budget du gouverneur (ms)", M_DOUBLE, &g_cfg.phys_budget_ms, 2, 16.5, 0.5, "physics", "budget_ms", 0 },
-    { "Itérations du solveur (0 = jeu)", M_INT, &g_cfg.solver_iterations, 0, 30, 1, "physics", "solver_iterations", 0 },
-    { "Collisions : paires min. en parallèle", M_INT, &g_cfg.narrow_min_pairs, 16, 1024, 16, "physics", "narrowphase_min_pairs", 0 },
-    { "Collisions : paires lourdes d'abord", M_BOOL, &g_cfg.narrow_balance, 0, 1, 1, "physics", "narrowphase_balance", 0 },
-    { "Atelier : contours fil de fer", M_BOOL, &g_cfg.editor_wireframe, 0, 1, 1, "editor", "wireframe", 0 },
-    { "Rendre la mémoire à Windows (crashs)", M_BOOL, &g_cfg.alloc_purge, 0, 1, 1, "memory", "allocator_purge", 0 },
-    { "Correctif suppression en symétrie", M_BOOL, &g_cfg.fix_editor_mirror, 0, 1, 1, "fixes", "editor_mirror_delete", 1 },
-    { "Statistiques OpenGL", M_BOOL, &g_cfg.gl_stats, 0, 1, 1, "profile", "gl_stats", 1 },
-    { "Échantillonneur (ms, 0 = off)", M_INT, &g_cfg.sampler_ms, 0, 20, 1, "profile", "sampler_ms", 1 },
-    { "Threads véhicules (0 = jeu)", M_INT, &g_cfg.vehicle_threads, 0, 64, 1, "vehicle", "threads", 1 },
-    { "Threads collisions (0 = off)", M_INT, &g_cfg.narrow_threads, 0, 32, 1, "physics", "narrowphase_threads", 1 },
-    { "Enregistrer dans stwpatch.ini", M_SAVE, NULL, 0, 0, 0, NULL, NULL, 0 },
+    { "Roues / blocs coincés sous la map", M_BOOL, &g_cfg.unstick, 0, 1, 1, "fixes", "unstick", 0, 1 },
+    { "   profondeur minimale (m)", M_DOUBLE, &g_cfg.unstick_depth, 0.05, 2, 0.05, "fixes", "unstick_depth", 0, 0.3 },
+    { "   durée avant coupure (s)", M_DOUBLE, &g_cfg.unstick_seconds, 0.2, 10, 0.1, "fixes", "unstick_seconds", 0, 1 },
+    { "   rayon maximal du bloc (m)", M_DOUBLE, &g_cfg.unstick_max_radius, 0.5, 30, 0.5, "fixes", "unstick_max_radius", 0, 3 },
+    { "Découpage des gros véhicules", M_BOOL, &g_cfg.compound_split, 0, 1, 1, "physics", "compound_split", 0, 1 },
+    { "Limite d'images par seconde", M_FPS, &g_cfg.fps_cap, 0, 0, 0, "misc", "fps_cap", 0, 0 },
+    { "Fréquence physique", M_RATE, &g_cfg.phys_rate, 0, 0, 0, "physics", "rate", 0, -1 },
+    { "   budget du gouverneur (ms)", M_DOUBLE, &g_cfg.phys_budget_ms, 2, 16.5, 0.5, "physics", "budget_ms", 0, 12 },
+    { "Itérations du solveur (0 = jeu)", M_INT, &g_cfg.solver_iterations, 0, 30, 1, "physics", "solver_iterations", 0, 0 },
+    { "Collisions : paires min. en parallèle", M_INT, &g_cfg.narrow_min_pairs, 16, 1024, 16, "physics", "narrowphase_min_pairs", 0, 64 },
+    { "Collisions : paires lourdes d'abord", M_BOOL, &g_cfg.narrow_balance, 0, 1, 1, "physics", "narrowphase_balance", 0, 1 },
+    { "Atelier : contours fil de fer", M_BOOL, &g_cfg.editor_wireframe, 0, 1, 1, "editor", "wireframe", 0, 1 },
+    { "Rendre la mémoire à Windows (crashs)", M_BOOL, &g_cfg.alloc_purge, 0, 1, 1, "memory", "allocator_purge", 0, 0 },
+    { "Correctif suppression en symétrie", M_BOOL, &g_cfg.fix_editor_mirror, 0, 1, 1, "fixes", "editor_mirror_delete", 1, 1 },
+    { "Statistiques OpenGL", M_BOOL, &g_cfg.gl_stats, 0, 1, 1, "profile", "gl_stats", 1, 1 },
+    { "Échantillonneur (ms, 0 = off)", M_INT, &g_cfg.sampler_ms, 0, 20, 1, "profile", "sampler_ms", 1, 0 },
+    { "Threads véhicules (0 = jeu)", M_INT, &g_cfg.vehicle_threads, 0, 64, 1, "vehicle", "threads", 1, AUTO_VEHICLE_THREADS },
+    { "Threads collisions (0 = off)", M_INT, &g_cfg.narrow_threads, 0, 32, 1, "physics", "narrowphase_threads", 1, AUTO_NARROW_THREADS },
+    { "Enregistrer dans stwpatch.ini", M_SAVE, NULL, 0, 0, 0, NULL, NULL, 0, 0 },
 };
 #define N_ITEMS ((int)(sizeof items / sizeof items[0]))
 
@@ -63,18 +67,26 @@ static int needs_restart(const item_t *it)
     return 0;
 }
 
-static void value_text(const item_t *it, char *buf, size_t n)
+static int auto_threads(int which)
 {
-    switch (it->kind) {
-    case M_BOOL:   snprintf(buf, n, "%s", *(int *)it->value ? "OUI" : "non"); break;
-    case M_INT:    snprintf(buf, n, "%d", *(int *)it->value); break;
-    case M_DOUBLE: snprintf(buf, n, "%.2f", *(double *)it->value); break;
+    SYSTEM_INFO si;
+    GetSystemInfo(&si);
+    int n = which == AUTO_VEHICLE_THREADS ? (int)si.dwNumberOfProcessors - 3 : (int)si.dwNumberOfProcessors / 2 - 1;
+    return n < 2 ? 2 : n > 8 ? 8 : n;              /* same rule as dllmain.c read_config */
+}
+
+static void format_value(int kind, double x, char *buf, size_t n)
+{
+    switch (kind) {
+    case M_BOOL:   snprintf(buf, n, "%s", x != 0 ? "OUI" : "non"); break;
+    case M_INT:    snprintf(buf, n, "%d", (int)x); break;
+    case M_DOUBLE: snprintf(buf, n, "%.2f", x); break;
     case M_FPS:
-        if (*(int *)it->value > 0) snprintf(buf, n, "%d images/s", *(int *)it->value);
+        if (x > 0) snprintf(buf, n, "%d images/s", (int)x);
         else snprintf(buf, n, "aucune");
         break;
     case M_RATE: {
-        int r = *(int *)it->value;
+        int r = (int)x;
         if (r < 0) snprintf(buf, n, "gouverneur stwpatch");
         else if (r == 0) snprintf(buf, n, "jeu");
         else snprintf(buf, n, "%d Hz", r);
@@ -82,6 +94,22 @@ static void value_text(const item_t *it, char *buf, size_t n)
     }
     default: buf[0] = 0;
     }
+}
+
+static double current(const item_t *it)
+{
+    if (!it->value) return 0;                    /* the save line has no value */
+    return it->kind == M_DOUBLE ? *(double *)it->value : (double)*(int *)it->value;
+}
+
+static void value_text(const item_t *it, char *buf, size_t n) { format_value(it->kind, current(it), buf, n); }
+
+static void default_text(const item_t *it, char *buf, size_t n)
+{
+    if (it->def == AUTO_VEHICLE_THREADS || it->def == AUTO_NARROW_THREADS)
+        snprintf(buf, n, "auto, %d", auto_threads((int)it->def));
+    else
+        format_value(it->kind, it->def, buf, n);
 }
 
 /* kind: 0 live, 1 needs a restart, 2 action */
@@ -99,7 +127,12 @@ void menu_line(int i, char *buf, size_t n, int *kind)
     /* pad to 42 characters, not bytes: accented letters take 2 bytes in UTF-8 */
     int chars = 0;
     for (const unsigned char *c = (const unsigned char *)it->label; *c; c++) chars += (*c & 0xC0) != 0x80;
-    snprintf(buf, n, "%s%*s %s%s", it->label, chars < 42 ? 42 - chars : 0, "", v, restart ? "  *" : "");
+    char d[48];
+    default_text(it, d, sizeof d);
+    int vchars = 0;
+    for (const unsigned char *c = (const unsigned char *)v; *c; c++) vchars += (*c & 0xC0) != 0x80;
+    snprintf(buf, n, "%s%*s %s%*s (défaut : %s)%s", it->label, chars < 42 ? 42 - chars : 0, "", v,
+             vchars < 20 ? 20 - vchars : 0, "", d, restart ? "  *" : "");
     *kind = restart;
 }
 

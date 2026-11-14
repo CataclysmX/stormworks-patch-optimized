@@ -100,7 +100,7 @@ int main(void)
     wc.hInstance = GetModuleHandleA(NULL);
     wc.lpszClassName = "fake_game";
     RegisterClassA(&wc);
-    HWND g = CreateWindowExA(0, "fake_game", "Stormworks", WS_OVERLAPPEDWINDOW | WS_VISIBLE, 100, 100, 1280, 720,
+    HWND g = CreateWindowExA(0, "fake_game", "stwpatch overlay test", WS_OVERLAPPEDWINDOW | WS_VISIBLE, 100, 100, 1280, 720,
                              NULL, NULL, wc.hInstance, NULL);
     (void)g;
     overlay_install();
