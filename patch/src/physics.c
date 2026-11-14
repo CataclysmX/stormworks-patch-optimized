@@ -361,6 +361,9 @@ static void write_report(FILE *f, const stats_t *s, const char *narrow)
     char us[160];
     unstick_format(us, sizeof us);
     fprintf(f, "unstick              : %s\n", g_cfg.unstick ? us : "off");
+    char cs[160];
+    compound_format(cs, sizeof cs);
+    fprintf(f, "compound split       : %s\n", g_cfg.compound_split && g_cfg.narrow_threads > 0 ? cs : "off");
     fputc('\n', f);
     for (int i = 0; i < MAX_WORLDS && s->world[i].w; i++)
         fprintf(f, "world %p : %lld steps (%.1f/s), avg %.2f ms, %.0f dyn bodies, %.0f manifolds\n",

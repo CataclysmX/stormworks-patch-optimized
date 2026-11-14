@@ -166,12 +166,16 @@ static volatile LONG heavy_next;
 static volatile LONG64 stat_max_pair_cycles, stat_heavy_hits;
 static double    cycles_per_ms;
 
+static volatile LONG pairs_running;      /* pairs being processed: idle threads may help them */
+
 static inline void run_pair(LONG i)
 {
     uint8_t *pair = job.pairs + (size_t)i * PAIR_STRIDE;
+    InterlockedIncrement(&pairs_running);
     uint64_t t0 = __rdtsc();
     if (!pair_has_soft_body(pair)) job.near_cb(pair, job.disp, job.info);
     pair_cost[i] = __rdtsc() - t0;
+    InterlockedDecrement(&pairs_running);
 }
 
 static void run_chunks(void)
@@ -183,11 +187,16 @@ static void run_chunks(void)
     }
     for (;;) {
         LONG i = InterlockedExchangeAdd(&job_next, CHUNK);
-        if (i >= job.count) return;
+        if (i >= job.count) break;
         LONG end = i + CHUNK < job.count ? i + CHUNK : job.count;
         for (; i < end; i++)
             if (pair_mark[i] != pass_id) run_pair(i);
     }
+    /* no pair left to start: help the children of a big compound pair (compound.c) while
+     * other threads still work, instead of waiting for them */
+    if (g_cfg.compound_split)
+        while (pairs_running > 0)
+            if (!compound_assist()) YieldProcessor();
 }
 
 /* physics thread, before waking the workers: map last pass's heavy pairs onto this pass */

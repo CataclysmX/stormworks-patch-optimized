@@ -8,6 +8,7 @@
 typedef struct {
     uint8_t *vt_dispatcher, *vt_hashed_cache, *vt_softrigid, *vt_discrete;
     uint8_t *vt_vehicle_tick, *vt_scene_update;
+    uint8_t *vt_compound_algo, *vt_manifold_result;   /* compound split (compound.c) */
     uint8_t *step_simulation, *default_near;
     uint8_t *thread_enqueue, *task_wait, *task_set_state, *mtx_lock, *mtx_unlock, *cnd_broadcast;
     void *prof_start, *prof_stop;           /* Start_Profile(name) / Stop_Profile() */
@@ -56,6 +57,7 @@ typedef struct {
     int unstick;              /* 1 = drop static contacts of small bodies stuck under the terrain */
     double unstick_depth, unstick_seconds, unstick_max_radius;
     int overlay_vk;           /* debug overlay toggle key (VK code), 0 = no overlay */
+    int compound_split;       /* 1 = children of one big compound pair processed in parallel */
 } stw_config;
 
 extern stw_config g_cfg;
@@ -90,6 +92,9 @@ long long vehicle_pool_ticks(void);
 void net_live(int *players, long long *bytes_sent, long long *refused);
 extern char g_last_exception[192];
 int  overlay_install(void);
+int  compound_split_install(void);
+int  compound_assist(void);
+void compound_format(char *buf, size_t size);
 extern uint8_t *g_base;
 extern const char *g_prefix;   /* "stwpatch" (client) or "stwpatch_server": output file names */
 

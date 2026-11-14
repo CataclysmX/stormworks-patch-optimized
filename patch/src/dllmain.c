@@ -98,6 +98,7 @@ static void read_config(const char *dir)
     g_cfg.narrow_threads      = GetPrivateProfileIntA("physics", "narrowphase_threads", ndef, ini);
     g_cfg.narrow_min_pairs    = GetPrivateProfileIntA("physics", "narrowphase_min_pairs", 64, ini);
     g_cfg.narrow_balance      = GetPrivateProfileIntA("physics", "narrowphase_balance", 1, ini);
+    g_cfg.compound_split      = GetPrivateProfileIntA("physics", "compound_split", 1, ini);
     if (g_cfg.narrow_threads > 32) g_cfg.narrow_threads = 32;
     g_cfg.phys_rate           = GetPrivateProfileIntA("physics", "rate", 0, ini);
     GetPrivateProfileStringA("physics", "budget_ms", "12", buf, sizeof buf, ini);
@@ -214,6 +215,7 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
     if (g_cfg.narrow_threads > 0 || g_cfg.unstick) {
         narrowphase_install();      /* the dispatch hook also runs unstick */
     }
+    if (g_cfg.narrow_threads > 0 && g_cfg.compound_split) compound_split_install();
     if (g_cfg.phys_profile || g_cfg.solver_iterations > 0 || g_cfg.solver_residual > 0 || g_cfg.phys_rate) {
         physics_install();
     }

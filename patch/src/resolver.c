@@ -180,6 +180,8 @@ int resolve_addresses(void)
     g_addr.vt_discrete      = rtti_vtable(".?AVbtDiscreteDynamicsWorld@@");
     g_addr.vt_vehicle_tick  = rtti_vtable(".?AUthreaded_tick_task@c_scene_vehicle_body@@");
     g_addr.vt_scene_update  = rtti_vtable(".?AUupdate_thread_task@c_scene@@");
+    g_addr.vt_compound_algo = rtti_vtable(".?AVbtCompoundCollisionAlgorithm@@");
+    g_addr.vt_manifold_result = rtti_vtable(".?AVbtManifoldResult@@");
     if (g_addr.vt_softrigid) g_addr.step_simulation = ((uint8_t **)g_addr.vt_softrigid)[12];
     if (g_addr.vt_dispatcher) {
         /* constructor: lea rax,[vtable] ... lea rax,[defaultNearCallback]; mov [reg+30h],rax */

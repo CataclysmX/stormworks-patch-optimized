@@ -207,6 +207,22 @@ The slowest pair is also written to the physics report and logged above 2 ms (at
 30 s): on 2026-11-14 a single pair took 6.9 ms of a 6.9 ms pass (85 % of it waiting for that
 one pair).
 
+## Compound split: one big vehicle on the terrain (`compound.c`)
+
+The parallel narrowphase splits pairs between threads, but one pair stays on one thread: a 36.6 m
+vehicle (btCompoundShape, thousands of children) on a 370 m terrain mesh cost 9.6-14 ms per step
+while the other threads waited. `btCompoundCollisionAlgorithm::processCollision` (vtable[1]) walks
+the compound's AABB tree and calls `btCompoundLeafCallback::ProcessChildShape` (FUN_1400e2960,
+found as "called by processCollision and by its tree walk, with the expected prologue", every
+.pdata fragment scanned) per overlapping child. While processCollision runs, the hooked
+ProcessChildShape only records the children; afterwards they are processed by this thread and by
+idle narrowphase threads (`run_chunks` helps while pairs are still running), each with a private
+copy of the callback (0x38) and of the btManifoldResult (0x38) whose wrappers ProcessChildShape
+swaps. Inline (original order) below 48 children, with a shared manifold, a foreign result class,
+or inside a nested compound. `[physics] compound_split=1`; counts in the physics report.
+`test/compound_test.c` (wine): every child once, private result copies, caller's result intact,
+inline cases; ~69 % of 5000 children on 3 helpers.
+
 ## In-game "Performance Warning"
 
 Fixed thresholds in the game (FUN_1405e2xxx, 2026-10-29 build), checked when a vehicle loads, not
