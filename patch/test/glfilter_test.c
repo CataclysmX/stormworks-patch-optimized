@@ -213,6 +213,16 @@ int main(void)
     expect("  filter off: all sent", t2.elided - t1.elided, 0);
     expect("no GL error", glGetError(), 0);
 
+    /* the game asks wglGetProcAddress for thousands of functions: the thunk pool must grow */
+    gen_t g = NULL;
+    for (int i = 0; i < 6000; i++) g = (gen_t)wglGetProcAddress("glGenBuffers");
+    expect("6000 more wrapped functions: filter still available", g_addr.gl_filter_on && g_cfg.gl_filter, 1);
+    unsigned extra = 0;
+    bind_buffer(GL_ARRAY_BUFFER, A); bind_buffer(GL_ARRAY_BUFFER, 0);          /* pending, then a late thunk */
+    g(1, &extra);
+    expect("  the last thunk works (and applied the pending unbind)", extra != 0 && binding(GL_ARRAY_BUFFER_BINDING) == 0, 1);
+    printf("  thunks: %ld wrapped, %ld transparent\n", n_wrapped, n_transparent);
+
     wglMakeCurrent(NULL, NULL);
     wglDeleteContext(rc);
     printf("RESULT: %s\n", fails ? "FAILED" : "OK");

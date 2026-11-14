@@ -70,6 +70,7 @@ static inline int slot(unsigned target)
 typedef struct { unsigned actual[2]; int pending[2]; } fstate_t;   /* actual: what the driver has */
 static DWORD ftls = TLS_OUT_OF_INDEXES;
 static volatile LONG pending_any;              /* threads with a pending unbind: the thunks' test */
+static volatile LONG n_wrapped, n_transparent;  /* GL functions behind a thunk / called directly */
 
 static fstate_t *fstate(void)
 {
@@ -209,6 +210,12 @@ static void frame_limit(void)
 
 static BOOL WINAPI hk_swap(HDC dc)
 {
+    static int reported;
+    if (!reported && g_addr.gl_filter_on && totals.frames == 100) {
+        reported = 1;
+        log_printf("opengl filter: %ld GL functions behind a thunk, %ld called directly (no buffer binding use)",
+                   n_wrapped, n_transparent);
+    }
     filter_flush();
     frame_limit();
     LARGE_INTEGER now;
@@ -232,18 +239,25 @@ static BOOL WINAPI hk_swap(HDC dc)
 
 /* ---- generated thunks ---- */
 #define THUNK_SIZE  128
-#define THUNK_POOL  (64 * 1024)
+#define THUNK_BLOCK (256 * 1024)                /* grown as needed: games load thousands of GL functions */
 static uint8_t *thunk_pool;
 static int      thunk_used, thunk_failed;
+static SRWLOCK  thunk_lock = SRWLOCK_INIT;     /* wglGetProcAddress may be called from several threads */
 
 static uint8_t *put64(uint8_t *p, uint64_t v) { memcpy(p, &v, 8); return p + 8; }
 
 /* always = 1: no fast path (the thunk must run its call even with nothing pending) */
 static void *make_thunk(void *real, void (*fn)(void), int always)
 {
-    if (!thunk_pool || thunk_used + THUNK_SIZE > THUNK_POOL) { thunk_failed = 1; return NULL; }
+    AcquireSRWLockExclusive(&thunk_lock);
+    if (!thunk_pool || thunk_used + THUNK_SIZE > THUNK_BLOCK) {
+        thunk_pool = VirtualAlloc(NULL, THUNK_BLOCK, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+        thunk_used = 0;
+        if (!thunk_pool) { thunk_failed = 1; ReleaseSRWLockExclusive(&thunk_lock); return NULL; }
+    }
     uint8_t *t = thunk_pool + thunk_used, *p = t;
     thunk_used += THUNK_SIZE;
+    ReleaseSRWLockExclusive(&thunk_lock);
     if (!always) {
         *p++ = 0x48; *p++ = 0xB8; p = put64(p, (uint64_t)(uintptr_t)&pending_any);   /* mov rax, &pending_any */
         *p++ = 0x83; *p++ = 0x38; *p++ = 0x00;                                         /* cmp dword [rax], 0 */
@@ -301,12 +315,18 @@ static int forgets_bindings(const char *n)
 /* the wrapper every other GL function goes through when the filter is on */
 static void *filter_wrap(const char *n, void *p)
 {
-    if (!g_addr.gl_filter_on || !p || transparent(n)) return p;
+    if (!g_addr.gl_filter_on || !p) return p;
+    if (transparent(n)) { InterlockedIncrement(&n_transparent); return p; }
     void *t = forgets_bindings(n) ? make_thunk(p, filter_forget_all, 1) : make_thunk(p, filter_flush, 0);
-    if (!t) {                                    /* out of thunks: an unwrapped function could see a pending unbind */
+    if (!t) {
+        /* an unwrapped function could see a pending unbind: off for good this session (the F4
+         * menu then shows it as needing a restart), pending unbinds applied at the next call */
+        g_addr.gl_filter_on = 0;
         g_cfg.gl_filter = 0;
+        log_printf("opengl filter: OFF for this session (no memory for a thunk, %s unwrapped)", n);
         return p;
     }
+    InterlockedIncrement(&n_wrapped);
     return t;
 }
 
@@ -374,8 +394,7 @@ int glstats_install(void)
     if (!g_cfg.gl_stats && !g_cfg.gl_filter) return 1;
     if (g_cfg.gl_filter) {
         ftls = TlsAlloc();
-        thunk_pool = VirtualAlloc(NULL, THUNK_POOL, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
-        g_addr.gl_filter_on = ftls != TLS_OUT_OF_INDEXES && thunk_pool;
+        g_addr.gl_filter_on = ftls != TLS_OUT_OF_INDEXES;
     }
     hook("OPENGL32.dll", "wglGetProcAddress", hk_get_proc, (void **)&real_get_proc);
     hook("OPENGL32.dll", "glDrawElements", hk_draw_elements, (void **)&real_draw_elements);
@@ -404,8 +423,8 @@ int glstats_install(void)
                 if (w != cur_fn) { patch_ptr((void **)&iat->u1.Function, w); n++; }
             }
         }
-        if (thunk_failed) log_printf("opengl filter: OFF (out of thunks)");
-        else log_printf("opengl filter: on (unbinds kept pending; %d imports wrapped, more as the game loads them)", n);
+        if (g_addr.gl_filter_on)
+            log_printf("opengl filter: on (unbinds kept pending; %d imports wrapped, more as the game loads them)", n);
     }
     HANDLE h = CreateThread(NULL, 0, log_thread, NULL, 0, NULL);
     if (h) CloseHandle(h);
