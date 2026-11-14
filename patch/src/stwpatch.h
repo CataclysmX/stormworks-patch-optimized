@@ -55,6 +55,7 @@ typedef struct {
     int fix_editor_mirror;    /* 1 = fix the editor's use-after-free when deleting with symmetry */
     int unstick;              /* 1 = drop static contacts of small bodies stuck under the terrain */
     double unstick_depth, unstick_seconds, unstick_max_radius;
+    int overlay_vk;           /* debug overlay toggle key (VK code), 0 = no overlay */
 } stw_config;
 
 extern stw_config g_cfg;
@@ -67,6 +68,28 @@ extern stw_config g_cfg;
 #define STWPATCH_GIT "?"
 #endif
 const char *stwpatch_build(void);   /* "1.1 (14/11/26 09:45)" */
+
+/* Live data for the F3 overlay (overlay.c): cumulative counters, the overlay takes differences. */
+typedef struct {
+    long long steps, ticks, ticks_slow, wait_phys_n;
+    double step_ms, tick_ms, wait_phys_ms, wait_veh_ms;
+    double step_max_ms, tick_max_ms;                  /* since the previous physics_live() */
+    int objects, dynamic, manifolds, constraints;     /* last step */
+    double rate_hz;
+} phys_live_t;
+void physics_live(phys_live_t *out);
+typedef struct {
+    long long passes, serial, pairs;
+    double pass_ms, tail_ms;                          /* cumulative */
+    double slow_ms;                                   /* slowest pair of the last slow pass, 0 = none */
+    unsigned long long slow_at;                       /* GetTickCount64() of it */
+    char slow_text[256];
+} narrow_live_t;
+void narrowphase_live(narrow_live_t *out);
+long long vehicle_pool_ticks(void);
+void net_live(int *players, long long *bytes_sent, long long *refused);
+extern char g_last_exception[192];
+int  overlay_install(void);
 extern uint8_t *g_base;
 extern const char *g_prefix;   /* "stwpatch" (client) or "stwpatch_server": output file names */
 

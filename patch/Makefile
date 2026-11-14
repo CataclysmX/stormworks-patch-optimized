@@ -1,12 +1,12 @@
 CC      = x86_64-w64-mingw32-gcc
 CFLAGS  = -O2 -Wall -Wextra -std=gnu11 -fno-strict-aliasing
 LDFLAGS = -shared -static -static-libgcc -s -Wl,--enable-stdcall-fixup
-LIBS    = -lpsapi -lkernel32 -ladvapi32 -lbcrypt
+LIBS    = -lpsapi -lkernel32 -ladvapi32 -lbcrypt -luser32 -lgdi32
 
 MI      = ../third_party/mimalloc
 MIFLAGS = -O2 -std=gnu11 -DNDEBUG -DMI_DEBUG=0 -DMI_SECURE=0 -DMI_STAT=0 -I$(MI)/include -w
 
-SRC = src/fastalloc.c src/dllmain.c src/vehicle_pool.c src/heap_track.c src/physics.c src/narrowphase.c src/crashguard.c src/resolver.c src/sampler.c src/net.c src/branding.c src/editor_fix.c src/unstick.c
+SRC = src/fastalloc.c src/dllmain.c src/vehicle_pool.c src/heap_track.c src/physics.c src/narrowphase.c src/crashguard.c src/resolver.c src/sampler.c src/net.c src/branding.c src/editor_fix.c src/unstick.c src/overlay.c
 
 CFLAGS += -I$(MI)/include
 # commit of the sources, for the log ("-dirty": built from uncommitted changes)

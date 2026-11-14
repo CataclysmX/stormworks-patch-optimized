@@ -156,3 +156,5 @@ int vehicle_pool_install(void)
     log_printf("vehicle pool: %d workers, enqueue hooked at %p", g_cfg.vehicle_threads, enq);
     return 1;
 }
+
+long long vehicle_pool_ticks(void) { return stat_tasks; }

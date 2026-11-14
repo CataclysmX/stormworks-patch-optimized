@@ -190,6 +190,16 @@ static DWORD WINAPI report_thread(LPVOID p)
     return 0;
 }
 
+void net_live(int *players, long long *bytes_sent, long long *refused)
+{
+    long long b = 0, r = 0;
+    AcquireSRWLockShared(&peer_lock);
+    int n = n_peers;
+    for (int i = 0; i < n; i++) { b += peers[i].bytes; r += peers[i].limit_fails; }
+    ReleaseSRWLockShared(&peer_lock);
+    *players = n; *bytes_sent = b; *refused = r;
+}
+
 int net_install(void)
 {
     IMAGE_NT_HEADERS64 *nt = (IMAGE_NT_HEADERS64 *)(g_base + ((IMAGE_DOS_HEADER *)g_base)->e_lfanew);

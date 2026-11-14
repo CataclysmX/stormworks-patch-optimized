@@ -217,6 +217,8 @@ static void plan_heavy(void)
 }
 
 /* physics thread, after the pass: remember the heaviest pairs for the next one */
+static void note_slow_pair(int i, uint64_t cycles);
+
 static void learn_heavy(void)
 {
     int idx[HEAVY_MAX], n = 0;
@@ -235,6 +237,63 @@ static void learn_heavy(void)
     }
     n_heavy = g_cfg.narrow_balance ? n : 0;
     if (n) InterlockedAdd64(&stat_max_pair_cycles, (LONG64)pair_cost[idx[0]]);
+    if (n) note_slow_pair(idx[0], pair_cost[idx[0]]);
+}
+
+/* Diagnostic: which pair is the slowest? One pair can hold the whole pass (85 % waiting for the
+ * last worker on 2026-11-14: one pair at 6.9 ms), e.g. a body caught in the terrain. Filled on
+ * the physics thread right after the pass, while both bodies are alive; reported with the
+ * physics report and logged (at most every 30 s) above 2 ms. */
+#define CO_ORIGIN   0x70
+#define CO_SHAPE    0x188
+#define CO_FLAGS    0x1a0
+typedef struct { int type, is_static; double radius, pos[3]; } body_info;
+static struct { double ms; body_info b[2]; } slow_pair;               /* slowest of the report period */
+static struct { double ms; body_info b[2]; ULONGLONG at; } slow_live;  /* last slow pass (overlay) */
+static SRWLOCK   slow_lock = SRWLOCK_INIT;
+static ULONGLONG slow_logged_ms;
+
+static void describe_body(uint8_t *co, body_info *bi)
+{
+    uint8_t *shape = *(uint8_t **)(co + CO_SHAPE);
+    bi->type = shape ? *(int *)(shape + 8) : -1;
+    bi->is_static = (*(int *)(co + CO_FLAGS) & 0x803) != 0;
+    /* btCollisionShape vtable[3] = getAngularMotionDisc: bounding radius */
+    bi->radius = shape ? ((double (*)(void *))(*(void ***)shape)[3])(shape) : 0;
+    memcpy(bi->pos, co + CO_ORIGIN, sizeof bi->pos);
+}
+
+static void note_slow_pair(int i, uint64_t cycles)
+{
+    double ms = cycles_per_ms > 0 ? cycles / cycles_per_ms : 0;
+    if (ms < 1.0) return;
+    uint8_t *pair = job.pairs + (size_t)i * PAIR_STRIDE;
+    uint8_t *p0 = *(uint8_t **)pair, *p1 = *(uint8_t **)(pair + 8);
+    uint8_t *c0 = p0 ? *(uint8_t **)p0 : NULL, *c1 = p1 ? *(uint8_t **)p1 : NULL;
+    if (!c0 || !c1) return;
+    body_info b0, b1;
+    describe_body(c0, &b0);
+    describe_body(c1, &b1);
+    AcquireSRWLockExclusive(&slow_lock);
+    slow_live.ms = ms; slow_live.b[0] = b0; slow_live.b[1] = b1; slow_live.at = GetTickCount64();
+    if (ms > slow_pair.ms) { slow_pair.ms = ms; slow_pair.b[0] = b0; slow_pair.b[1] = b1; }
+    ReleaseSRWLockExclusive(&slow_lock);
+}
+
+static const char *shape_name(int t)
+{
+    switch (t) {
+    case 0: return "box";            case 4: return "convex hull";   case 8: return "sphere";
+    case 10: return "capsule";       case 13: return "cylinder";     case 21: return "triangle mesh";
+    case 22: return "scaled mesh";   case 24: return "heightfield";  case 28: return "plane";
+    case 31: return "compound";      default: return "shape";
+    }
+}
+
+static int format_body(char *buf, size_t size, const body_info *b)
+{
+    return snprintf(buf, size, "%s %s%d r=%.1f m at (%.0f, %.0f, %.0f)", b->is_static ? "static" : "dynamic",
+                    shape_name(b->type), b->type, b->radius, b->pos[0], b->pos[1], b->pos[2]);
 }
 
 static thread_ctx *thread_ctx_init(void)
@@ -397,6 +456,43 @@ void narrowphase_format(char *buf, size_t size)
              par ? (double)hits / par : 0.0, (long long)ser,
              (long long)stat_reason[R_SMALL], (long long)stat_reason[R_CACHE], (long long)stat_reason[R_NEAR],
              (long long)stat_reason[R_MODE], (long long)stat_reason[R_BUSY]);
+    AcquireSRWLockExclusive(&slow_lock);
+    if (slow_pair.ms > 0) {
+        char a[128], b[128];
+        format_body(a, sizeof a, &slow_pair.b[0]);
+        format_body(b, sizeof b, &slow_pair.b[1]);
+        size_t len = strlen(buf);
+        snprintf(buf + len, size - len, "; slowest pair %.2f ms: %s vs %s", slow_pair.ms, a, b);
+        ULONGLONG now = GetTickCount64();
+        if (slow_pair.ms > 2.0 && now - slow_logged_ms > 30000) {
+            slow_logged_ms = now;
+            log_printf("narrowphase: slow pair %.2f ms per pass: %s vs %s", slow_pair.ms, a, b);
+        }
+        slow_pair.ms = 0;
+    }
+    ReleaseSRWLockExclusive(&slow_lock);
+}
+
+void narrowphase_live(narrow_live_t *o)
+{
+    LARGE_INTEGER f;
+    QueryPerformanceFrequency(&f);
+    memset(o, 0, sizeof *o);
+    o->passes = stat_parallel;
+    o->serial = stat_serial;
+    o->pairs = stat_pairs;
+    o->pass_ms = stat_pass_ticks * 1000.0 / f.QuadPart;
+    o->tail_ms = stat_tail_ticks * 1000.0 / f.QuadPart;
+    AcquireSRWLockShared(&slow_lock);
+    if (slow_live.ms > 0) {
+        char a[128], b[128];
+        format_body(a, sizeof a, &slow_live.b[0]);
+        format_body(b, sizeof b, &slow_live.b[1]);
+        o->slow_ms = slow_live.ms;
+        o->slow_at = slow_live.at;
+        snprintf(o->slow_text, sizeof o->slow_text, "%s vs %s", a, b);
+    }
+    ReleaseSRWLockShared(&slow_lock);
 }
 
 static DWORD WINAPI stats_thread(LPVOID p)

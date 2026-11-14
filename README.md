@@ -191,6 +191,31 @@ The server doesn't import OpenAL64 → the `steam_api64.dll` proxy (same code). 
   refused sends) and `[network]` config via `SetGlobalConfigValueInt32` (public Steam API).
   No Steam file or Steam memory is modified.
 
+## Debug overlay (F3)
+
+`overlay.c`, `[misc] overlay_key=F3`: F3 while the game has the focus toggles a semi-transparent
+panel over the top-left of the game, refreshed every 250 ms (figures over the last second):
+patch version / build date / commit, simulation ticks/s and % slow ticks (slow motion), physics
+steps/s, step time, rate (governor), objects / dynamic bodies / contact manifolds / constraints,
+main-thread waits, narrowphase (threads, pairs, pass time, % waiting for the last worker) and the
+**slowest collision pair** (≥ 1 ms: both bodies' shape type, bounding radius, static or not,
+position), vehicle ticks/s, unstick counts, memory (private, working set, mimalloc commit),
+network (players, KB/s, refused sends), active fixes, last exception. It is a separate topmost
+click-through window that never takes the focus (GDI, no renderer hook): it works with Vulkan or
+OpenGL, under Proton or Windows, but not over an exclusive fullscreen mode on Windows.
+The slowest pair is also written to the physics report and logged above 2 ms (at most every
+30 s): on 2026-11-14 a single pair took 6.9 ms of a 6.9 ms pass (85 % of it waiting for that
+one pair).
+
+## In-game "Performance Warning"
+
+Fixed thresholds in the game (FUN_1405e2xxx, 2026-10-29 build), checked when a vehicle loads, not
+measurements: more than 50 physics bodies, 2000 physics shapes, 50 lights or 30 monitors, file
+larger than 10 / 14 MB. stwpatch does not change the counts, so the message still appears; what
+changes is the cost: shapes and bodies → collision detection (parallel narrowphase), vehicle
+logic (vehicle pool), physics rate (governor). Still single-threaded: Bullet's constraint solver,
+and everything about lights and monitors (rendering).
+
 ## Version label
 `branding.c`: the main menu label ("v1.15.23 64Bit", built by `FUN_140261f80`) becomes
 "v1.15.23 64Bit Cata-ptimised" (`[misc] version_suffix`). Only that function's suffix changes (2 length

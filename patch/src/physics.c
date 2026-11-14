@@ -71,6 +71,16 @@ static struct {
     int nph;
 } st;
 
+static phys_live_t live;                    /* cumulative, for the F3 overlay */
+
+void physics_live(phys_live_t *out)
+{
+    AcquireSRWLockExclusive(&stat_lock);
+    *out = live;
+    live.step_max_ms = live.tick_max_ms = 0;
+    ReleaseSRWLockExclusive(&stat_lock);
+}
+
 static int root_index = -1;
 static int logged_solver;
 
@@ -231,6 +241,19 @@ static int hook_step(void *world, double time_step, int max_sub, double fixed)
     int r = orig_step(world, time_step, max_sub, fixed);
     double dt = now_ms() - t0;
     governor_update(dt);
+    {
+        uint8_t *d = *(uint8_t **)(w + WORLD_DISPATCHER);
+        AcquireSRWLockExclusive(&stat_lock);
+        live.steps++;
+        live.step_ms += dt;
+        if (dt > live.step_max_ms) live.step_max_ms = dt;
+        live.objects = *(int *)(w + WORLD_NUM_OBJECTS);
+        live.dynamic = *(int *)(w + WORLD_NUM_DYNAMIC);
+        live.constraints = *(int *)(w + WORLD_NUM_CONSTR);
+        live.manifolds = d ? *(int *)(d + DISP_NUM_MANIFOLDS) : 0;
+        live.rate_hz = cur_rate;
+        ReleaseSRWLockExclusive(&stat_lock);
+    }
     if (!g_cfg.phys_profile) return r;
 
     uint8_t *disp = *(uint8_t **)(w + WORLD_DISPATCHER);
@@ -262,6 +285,8 @@ static void hook_wait(uint8_t *task)
     AcquireSRWLockExclusive(&stat_lock);
     st.wait_phys_ms += dt;
     st.wait_phys_n++;
+    live.wait_phys_ms += dt;
+    live.wait_phys_n++;
     governor_wait(dt);
     {
         static double last_tick_end;
@@ -272,6 +297,9 @@ static void hook_wait(uint8_t *task)
                 st.tick_ms += iv; st.ticks++;
                 if (iv > st.tick_max_ms) st.tick_max_ms = iv;
                 if (iv > 1000.0 / 60 + 0.5) st.ticks_slow++;
+                live.tick_ms += iv; live.ticks++;
+                if (iv > live.tick_max_ms) live.tick_max_ms = iv;
+                if (iv > 1000.0 / 60 + 0.5) live.ticks_slow++;
             }
         }
         last_tick_end = t;
@@ -298,6 +326,7 @@ static void *hook_tick_dtor(uint8_t *task, unsigned flags)
     double dt = now_ms() - t0;
     AcquireSRWLockExclusive(&stat_lock);
     st.wait_veh_ms += dt;
+    live.wait_veh_ms += dt;
     ReleaseSRWLockExclusive(&stat_lock);
     return r;
 }

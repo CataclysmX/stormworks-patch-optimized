@@ -14,6 +14,7 @@
 #include <mimalloc.h>
 
 static char marker_path[MAX_PATH];
+char g_last_exception[192];
 static volatile LONG logged;
 static HMODULE self;
 
@@ -61,6 +62,12 @@ static LONG CALLBACK veh(EXCEPTION_POINTERS *ep)
                  (unsigned long long)ep->ExceptionRecord->ExceptionInformation[1]);
     log_printf("EXCEPTION 0x%08lx at %s%s, thread %lu (first chance, may be handled by the game)",
                code, where, extra, GetCurrentThreadId());
+    {
+        SYSTEMTIME t;
+        GetLocalTime(&t);
+        snprintf(g_last_exception, sizeof g_last_exception, "%02d:%02d:%02d 0x%08lx at %s%s",
+                 t.wHour, t.wMinute, t.wSecond, code, where, extra);
+    }
     if (code == EXCEPTION_ACCESS_VIOLATION && ep->ExceptionRecord->NumberParameters >= 2) {
         /* freed (FREE / RESERVE) vs never valid; mimalloc region = a CRT heap block */
         uintptr_t fa = (uintptr_t)ep->ExceptionRecord->ExceptionInformation[1];

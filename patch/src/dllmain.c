@@ -110,6 +110,12 @@ static void read_config(const char *dir)
     g_cfg.sampler_ms          = GetPrivateProfileIntA("profile", "sampler_ms", 0, ini);
     g_cfg.fix_editor_mirror   = GetPrivateProfileIntA("fixes", "editor_mirror_delete", 1, ini);
     g_cfg.unstick             = GetPrivateProfileIntA("fixes", "unstick", 1, ini);
+    {   /* [misc] overlay_key = F1..F12 (default F3), empty or 0 = no overlay */
+        char key[16];
+        GetPrivateProfileStringA("misc", "overlay_key", "F3", key, sizeof key, ini);
+        int fk = (key[0] == 'F' || key[0] == 'f') ? atoi(key + 1) : 0;
+        g_cfg.overlay_vk = fk >= 1 && fk <= 12 ? VK_F1 + fk - 1 : 0;
+    }
     GetPrivateProfileStringA("fixes", "unstick_depth", "0.3", buf, sizeof buf, ini);
     g_cfg.unstick_depth       = atof(buf) > 0.05 ? atof(buf) : 0.05;
     GetPrivateProfileStringA("fixes", "unstick_seconds", "1", buf, sizeof buf, ini);
@@ -216,6 +222,7 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
     if (g_cfg.net_monitor) net_install();
     if (!is_server) branding_install();
     if (!is_server && g_cfg.fix_editor_mirror) editor_fix_install();
+    if (!is_server && g_cfg.overlay_vk) overlay_install();
     crashguard_stage("game-start");
     HANDLE h = CreateThread(NULL, 0, late_init, NULL, 0, NULL);
     if (h) CloseHandle(h);
