@@ -53,6 +53,8 @@ typedef struct {
     int sampler_ms;           /* 0 = off; sampling period of the loading profiler */
     int safe_mode;            /* 1 = after a crash during startup, next launch runs unpatched */
     int fix_editor_mirror;    /* 1 = fix the editor's use-after-free when deleting with symmetry */
+    int unstick;              /* 1 = drop static contacts of small bodies stuck under the terrain */
+    double unstick_depth, unstick_seconds, unstick_max_radius;
 } stw_config;
 
 extern stw_config g_cfg;
@@ -76,6 +78,9 @@ extern volatile ULONGLONG g_last_tick_ms;
 extern volatile DWORD g_tick_tid;     /* the game thread that ticks (waits on physics) */
 extern ULONGLONG g_start_ms;   /* GetTickCount64() when the DLL loaded */
 void narrowphase_format(char *buf, size_t size);
+void unstick_after_dispatch(void *disp);
+void unstick_format(char *buf, size_t size);
+extern volatile double g_world_up[3];
 int  patch_jump(uint8_t *at, size_t len, void *to);
 void *patch_ptr(void **slot, void *value);
 void *make_trampoline(uint8_t *target, size_t stolen, const uint8_t *expect);

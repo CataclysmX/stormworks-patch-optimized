@@ -158,6 +158,23 @@ The server doesn't import OpenAL64 → the `steam_api64.dll` proxy (same code). 
   reads `part+0x58` (its definition) from the freed object for FUN_14080c1c0. Two sites (selection:
   `r14`, single part: `rdi`), found by byte pattern; the patch loads the definition into that
   callee-saved register before the delete and passes it after: same calls, same order.
+* Crashes at `exe+0x58b280` (2026-11-14, another player, DLL of 2026-10-25): FUN_14058b200, called
+  every frame from FUN_1407425a0 → FUN_1405ebd20, walks a list at world+0x5f28 whose entries hold
+  weak handles (dead flag +0, object +8, type +0x10) and interpolate the object's transform. A
+  handle was read after being freed, while many vehicles despawned; stale return addresses on the
+  stack (`fa_free`, `_mi_os_purge_ex`) show the thread had just freed memory and mimalloc had
+  decommitted it. Same class as above: covered by `allocator_purge=0` (the Windows heap keeps such
+  pages too). Who frees the handle too early is not identified (virtual calls; REA's Ghidra runs
+  out of memory at 2 GB on this exe).
+* `unstick.c` (`[fixes] unstick=1`): game bug, with or without the patch: a wheel or block caught
+  under the terrain is pushed down by it while its vehicle pulls it up (jitter, many contacts).
+  After each narrowphase, a dynamic body of radius ≤ `unstick_max_radius` (3 m: never a whole
+  vehicle) pushed DOWN (contact normal against the gravity read from world+0x1e0) into static
+  geometry deeper than `unstick_depth` (0.3 m) for `unstick_seconds` (1 s) has its contacts with
+  static geometry dropped (manifold point count 0) until static geometry pushes it up again for
+  0.2 s, or 2 s without contact. Layout notes in `unstick.c`; logic tested natively by
+  `test/unstick_test.c` (`gcc -Itest/linux_shim test/unstick_test.c`). The physics report shows
+  the counts.
 * Windows: `dist/windows/` (`install.bat` / `uninstall.bat`, guards on DLL sizes) and `dist/stwpatch-windows.zip`.
 
 ## Multiplayer (in-game hosting): "slow" / "desynced" players

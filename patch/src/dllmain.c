@@ -109,6 +109,13 @@ static void read_config(const char *dir)
     g_cfg.safe_mode           = GetPrivateProfileIntA("misc", "safe_mode", 1, ini);
     g_cfg.sampler_ms          = GetPrivateProfileIntA("profile", "sampler_ms", 0, ini);
     g_cfg.fix_editor_mirror   = GetPrivateProfileIntA("fixes", "editor_mirror_delete", 1, ini);
+    g_cfg.unstick             = GetPrivateProfileIntA("fixes", "unstick", 1, ini);
+    GetPrivateProfileStringA("fixes", "unstick_depth", "0.3", buf, sizeof buf, ini);
+    g_cfg.unstick_depth       = atof(buf) > 0.05 ? atof(buf) : 0.05;
+    GetPrivateProfileStringA("fixes", "unstick_seconds", "1", buf, sizeof buf, ini);
+    g_cfg.unstick_seconds     = atof(buf) > 0.1 ? atof(buf) : 0.1;
+    GetPrivateProfileStringA("fixes", "unstick_max_radius", "3", buf, sizeof buf, ini);
+    g_cfg.unstick_max_radius  = atof(buf);
     GetPrivateProfileStringA("misc", "version_suffix", "Cata-ptimised", g_cfg.version_suffix, sizeof g_cfg.version_suffix, ini);
     g_cfg.net_monitor         = GetPrivateProfileIntA("network", "monitor", 1, ini);
     g_cfg.net_send_buffer_kb  = GetPrivateProfileIntA("network", "send_buffer_kb", 4096, ini);
@@ -183,8 +190,8 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
     if (g_cfg.vehicle_threads > 0) {
         vehicle_pool_install();
     }
-    if (g_cfg.narrow_threads > 0) {
-        narrowphase_install();
+    if (g_cfg.narrow_threads > 0 || g_cfg.unstick) {
+        narrowphase_install();      /* the dispatch hook also runs unstick */
     }
     if (g_cfg.phys_profile || g_cfg.solver_iterations > 0 || g_cfg.solver_residual > 0 || g_cfg.phys_rate) {
         physics_install();

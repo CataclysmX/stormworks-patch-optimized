@@ -15,6 +15,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <intrin.h>
+#include <math.h>
 
 #define WORLD_SOLVER_INFO   0xa8
 #define SI_NUM_ITERATIONS   0x28
@@ -24,6 +25,7 @@
 #define DISP_NUM_MANIFOLDS  0x14
 #define WORLD_NUM_CONSTR    0x1a4
 #define WORLD_NUM_DYNAMIC   0x1c4
+#define WORLD_GRAVITY       0x1e0
 
 /* CProfileNode */
 #define PN_NAME     0x00
@@ -217,6 +219,10 @@ static int hook_step(void *world, double time_step, int max_sub, double fixed)
 {
     uint8_t *w = world;
     apply_solver_knobs(w);
+    {   /* btDiscreteDynamicsWorld::m_gravity (getGravity = vtable[18]): "up" for unstick.c */
+        double *g = (double *)(w + WORLD_GRAVITY), l = sqrt(g[0] * g[0] + g[1] * g[1] + g[2] * g[2]);
+        if (l > 1e-3) { g_world_up[0] = -g[0] / l; g_world_up[1] = -g[1] / l; g_world_up[2] = -g[2] / l; }
+    }
     fixed = choose_fixed(fixed);
     cur_rate = fixed > 0 ? 1.0 / fixed : 0;
     if (!g_cfg.phys_profile && g_cfg.phys_rate >= 0) return orig_step(world, time_step, max_sub, fixed);
@@ -323,6 +329,9 @@ static void write_report(FILE *f, const stats_t *s, const char *narrow)
     fprintf(f, "physics rate         : %.0f Hz now (%s)\n", cur_rate,
             g_cfg.phys_rate > 0 ? "forced" : g_cfg.phys_rate < 0 ? "stwpatch governor" : "game");
     fprintf(f, "narrowphase          : %s\n", narrow);
+    char us[160];
+    unstick_format(us, sizeof us);
+    fprintf(f, "unstick              : %s\n", g_cfg.unstick ? us : "off");
     fputc('\n', f);
     for (int i = 0; i < MAX_WORLDS && s->world[i].w; i++)
         fprintf(f, "world %p : %lld steps (%.1f/s), avg %.2f ms, %.0f dyn bodies, %.0f manifolds\n",

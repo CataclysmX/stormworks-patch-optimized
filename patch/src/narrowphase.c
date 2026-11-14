@@ -306,7 +306,17 @@ static void reject(int r, void *cache_vt, void *near_cb, int mode, int count)
                    (unsigned long long)((uint8_t *)near_cb - g_base), mode);
 }
 
+static void dispatch_parallel(void *disp, uint8_t *pair_cache, uint8_t *info, void *disp2);
+
+/* every dispatch: parallel or original, then unstick.c on the fresh manifolds (before the solver) */
 static void hk_dispatch(void *disp, uint8_t *pair_cache, uint8_t *info, void *disp2)
+{
+    if (g_cfg.narrow_threads > 0) dispatch_parallel(disp, pair_cache, info, disp2);
+    else orig_dispatch(disp, pair_cache, info, disp2);
+    unstick_after_dispatch(disp);
+}
+
+static void dispatch_parallel(void *disp, uint8_t *pair_cache, uint8_t *info, void *disp2)
 {
     int count = pair_cache ? *(int *)(pair_cache + PC_NUM_PAIRS) : 0;
     near_t near_cb = *(near_t *)((uint8_t *)disp + DISP_NEAR_CALLBACK);
@@ -427,6 +437,11 @@ int narrowphase_install(void)
     uint64_t c1 = __rdtsc();
     QueryPerformanceCounter(&q1);
     cycles_per_ms = (double)(c1 - c0) / ((double)(q1.QuadPart - q0.QuadPart) * 1000.0 / f.QuadPart);
+    if (g_cfg.narrow_threads <= 0) {       /* unstick only: just the dispatch slot */
+        orig_dispatch = patch_ptr(&vt[7], hk_dispatch);
+        log_printf("narrowphase: off (unstick hook only)");
+        return 1;
+    }
     tls_index = TlsAlloc();
     if (tls_index == TLS_OUT_OF_INDEXES) return 0;
     InitializeCriticalSectionAndSpinCount(&pool_cs, 4000);

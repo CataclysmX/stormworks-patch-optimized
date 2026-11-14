@@ -21,6 +21,7 @@ stw_config g_cfg;
 uint8_t *g_base;
 void log_printf(const char *fmt, ...) { va_list ap; va_start(ap, fmt); vprintf(fmt, ap); va_end(ap); putchar('\n'); }
 void *patch_ptr(void **slot, void *value) { void *p = *slot; *slot = value; return p; }
+void unstick_after_dispatch(void *disp) { (void)disp; }
 
 #define NPAIRS 3000
 #define POOL_N 4096
