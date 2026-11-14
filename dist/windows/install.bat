@@ -49,7 +49,14 @@ if errorlevel 1 goto copy_failed
 echo   opengl32.dll = stwpatch (for server64.exe)
 
 :ini
-if not exist "%GAME%\stwpatch.ini" copy /y "%SRC%stwpatch.ini" "%GAME%\stwpatch.ini" >nul
+rem existing stwpatch.ini: new options added, the user's values kept (merge_ini.ps1, .bak kept)
+if not exist "%GAME%\stwpatch.ini" goto ini_new
+powershell -NoProfile -ExecutionPolicy Bypass -File "%SRC%merge_ini.ps1" "%SRC%stwpatch.ini" "%GAME%\stwpatch.ini"
+if errorlevel 1 echo   stwpatch.ini kept as it was (could not add the new options; the defaults apply)
+goto ini_done
+:ini_new
+copy /y "%SRC%stwpatch.ini" "%GAME%\stwpatch.ini" >nul
+:ini_done
 echo.
 echo Installed. Config: stwpatch.ini   Logs: stwpatch.log, stwpatch_server.log
 echo If the game does not start: send stwpatch.log and crash.dmp from the game folder.

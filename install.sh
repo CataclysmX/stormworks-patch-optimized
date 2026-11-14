@@ -62,7 +62,19 @@ install)
         cp "$HERE/patch/build/opengl32.dll" "$GAME/opengl32.dll"
         echo "  opengl32.dll added (server64.exe loads stwpatch through it; the game ships no opengl32.dll)"
     fi
-    [ -f "$GAME/stwpatch.ini" ] || cp "$HERE/patch/stwpatch.ini" "$GAME/stwpatch.ini"
+    if [ -f "$GAME/stwpatch.ini" ]; then
+        # new options added, the user's values kept (tools/merge_ini.awk); previous file -> .bak
+        awk -f "$HERE/tools/merge_ini.awk" "$GAME/stwpatch.ini" "$HERE/patch/stwpatch.ini" > "$GAME/stwpatch.ini.new"
+        if sed 's/\r$//' "$GAME/stwpatch.ini" | cmp -s - "$GAME/stwpatch.ini.new"; then
+            rm -f "$GAME/stwpatch.ini.new"
+        else
+            cp "$GAME/stwpatch.ini" "$GAME/stwpatch.ini.bak"
+            mv "$GAME/stwpatch.ini.new" "$GAME/stwpatch.ini"
+            echo "  stwpatch.ini updated: new options added, your values kept (previous file: stwpatch.ini.bak)"
+        fi
+    else
+        cp "$HERE/patch/stwpatch.ini" "$GAME/stwpatch.ini"
+    fi
     echo "installed. config: $GAME/stwpatch.ini   logs: stwpatch.log (game), stwpatch_server.log (server)"
     echo "note: a Steam 'verify files' or game update restores the original DLLs; just reinstall."
     ;;
