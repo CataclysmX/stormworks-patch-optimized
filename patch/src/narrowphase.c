@@ -256,7 +256,9 @@ static void learn_heavy(void)
 #define CO_ORIGIN   0x70
 #define CO_SHAPE    0x188
 #define CO_FLAGS    0x1a0
-typedef struct { int type, is_static; double radius, pos[3]; } body_info;
+#define COMPOUND_SHAPE     31
+#define COMPOUND_CHILDREN  0x24   /* btCompoundShape::m_children.size() (getAabb reads it) */
+typedef struct { int type, is_static, children; double radius, pos[3]; } body_info;
 static struct { double ms; body_info b[2]; } slow_pair;               /* slowest of the report period */
 static struct { double ms; body_info b[2]; ULONGLONG at; } slow_live;  /* last slow pass (overlay) */
 static SRWLOCK   slow_lock = SRWLOCK_INIT;
@@ -267,6 +269,7 @@ static void describe_body(uint8_t *co, body_info *bi)
     uint8_t *shape = *(uint8_t **)(co + CO_SHAPE);
     bi->type = shape ? *(int *)(shape + 8) : -1;
     bi->is_static = (*(int *)(co + CO_FLAGS) & 0x803) != 0;
+    bi->children = shape && bi->type == COMPOUND_SHAPE ? *(int *)(shape + COMPOUND_CHILDREN) : 0;
     /* btCollisionShape vtable[3] = getAngularMotionDisc: bounding radius */
     bi->radius = shape ? ((double (*)(void *))(*(void ***)shape)[3])(shape) : 0;
     memcpy(bi->pos, co + CO_ORIGIN, sizeof bi->pos);
@@ -301,8 +304,10 @@ static const char *shape_name(int t)
 
 static int format_body(char *buf, size_t size, const body_info *b)
 {
-    return snprintf(buf, size, "%s %s%d r=%.1f m at (%.0f, %.0f, %.0f)", b->is_static ? "static" : "dynamic",
-                    shape_name(b->type), b->type, b->radius, b->pos[0], b->pos[1], b->pos[2]);
+    char kids[32] = "";
+    if (b->type == COMPOUND_SHAPE) snprintf(kids, sizeof kids, " (%d shapes)", b->children);
+    return snprintf(buf, size, "%s %s%d%s r=%.1f m at (%.0f, %.0f, %.0f)", b->is_static ? "static" : "dynamic",
+                    shape_name(b->type), b->type, kids, b->radius, b->pos[0], b->pos[1], b->pos[2]);
 }
 
 static thread_ctx *thread_ctx_init(void)

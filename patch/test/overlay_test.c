@@ -8,6 +8,7 @@ stw_config g_cfg;
 game_addrs g_addr;
 char g_ini_path[MAX_PATH];
 void mi_option_set(mi_option_t o, long v) { (void)o; (void)v; }
+void editor_wire_apply(void) {}
 char g_last_exception[192] = "09:44:13 0xc0000005 at stormworks64.exe+0x58b280 (read 0x5de749b6110)";
 
 void log_printf(const char *fmt, ...)
@@ -83,6 +84,7 @@ int main(void)
     g_cfg.unstick = 1; g_cfg.unstick_depth = 0.3; g_cfg.unstick_seconds = 1; g_cfg.unstick_max_radius = 3;
     g_cfg.compound_split = 1; g_cfg.phys_budget_ms = 12; g_cfg.narrow_min_pairs = 64; g_cfg.narrow_balance = 1;
     g_addr.narrow_hook_on = 1; g_addr.compound_split_on = 1;
+    g_cfg.editor_wireframe = 1;
     GetFullPathNameA("build\\overlay_test.ini", MAX_PATH, g_ini_path, NULL);
     g_cfg.narrow_threads = 7;
     g_cfg.vehicle_threads = 8;

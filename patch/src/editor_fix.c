@@ -130,3 +130,66 @@ int editor_fix_install(void)
                (unsigned long long)(at[0] - g_base), (unsigned long long)(at[1] - g_base));
     return 1;
 }
+
+/* Wireframe pass of the workbench (measurement / option, [editor] wireframe).
+ * FUN_140680c00 draws a mesh, then, when its "outline" argument is set, draws it again with
+ * glPolygonMode(GL_FRONT_AND_BACK, GL_LINE) and goes back to GL_FILL; it is the only
+ * polygon-mode-line draw in the game and the main thread's top OpenGL caller in the workbench
+ * (2026-11-14 sampler: 31 %). The pass is guarded by "je short past_the_pass": wireframe=0
+ * turns it into "jmp short" (same length, one byte, so it can be flipped live from the menu
+ * while the game draws). */
+static uint8_t *wire_jcc;
+
+static uint8_t *find_once(uint8_t *p, size_t n, const uint8_t *pat, size_t len, int *count)
+{
+    uint8_t *hit = NULL;
+    *count = 0;
+    for (size_t i = 0; i + len <= n; i++)
+        if (p[i] == pat[0] && !memcmp(p + i, pat, len)) { hit = p + i; (*count)++; }
+    return hit;
+}
+
+void editor_wire_apply(void)
+{
+    if (!wire_jcc) return;
+    uint8_t op = g_cfg.editor_wireframe ? 0x74 : 0xEB;
+    if (*wire_jcc == op) return;
+    DWORD old;
+    if (!VirtualProtect(wire_jcc, 1, PAGE_EXECUTE_READWRITE, &old)) return;
+    *(volatile uint8_t *)wire_jcc = op;
+    VirtualProtect(wire_jcc, 1, old, &old);
+    FlushInstructionCache(GetCurrentProcess(), wire_jcc, 1);
+}
+
+int editor_wire_install(void)
+{
+    IMAGE_NT_HEADERS64 *nt = (IMAGE_NT_HEADERS64 *)(g_base + ((IMAGE_DOS_HEADER *)g_base)->e_lfanew);
+    IMAGE_SECTION_HEADER *sec = IMAGE_FIRST_SECTION(nt), *text = NULL;
+    for (int i = 0; i < nt->FileHeader.NumberOfSections; i++)
+        if (!strncmp((char *)sec[i].Name, ".text", 8)) text = &sec[i];
+    if (!text) return 0;
+    uint8_t *t = g_base + text->VirtualAddress;
+    size_t n = text->Misc.VirtualSize;
+    /* mov edx, GL_LINE / GL_FILL; mov ecx, GL_FRONT_AND_BACK; call [glPolygonMode] */
+    static const uint8_t line_mode[] = { 0xBA, 0x01, 0x1B, 0x00, 0x00, 0xB9, 0x08, 0x04, 0x00, 0x00, 0xFF, 0x15 };
+    static const uint8_t fill_mode[] = { 0xBA, 0x02, 0x1B, 0x00, 0x00, 0xB9, 0x08, 0x04, 0x00, 0x00, 0xFF, 0x15 };
+    int nl, nf;
+    uint8_t *line = find_once(t, n, line_mode, sizeof line_mode, &nl);
+    uint8_t *fill = find_once(t, n, fill_mode, sizeof fill_mode, &nf);
+    if (nl != 1 || nf != 1 || fill < line || fill - line > 0x60) {
+        log_printf("editor wireframe: pass not found (%d / %d sites), option unavailable", nl, nf);
+        return 0;
+    }
+    uint8_t *end = fill + sizeof fill_mode + 4;           /* right after the GL_FILL call */
+    for (uint8_t *p = line - 2; p >= line - 0x60; p--)
+        if (p[0] == 0x74 && p + 2 + (int8_t)p[1] == end) { wire_jcc = p; break; }
+    if (!wire_jcc) {
+        log_printf("editor wireframe: guard jump not found, option unavailable");
+        return 0;
+    }
+    g_addr.editor_wire_on = 1;
+    editor_wire_apply();
+    log_printf("editor wireframe: option ready at +0x%llx (%s)", (unsigned long long)(wire_jcc - g_base),
+               g_cfg.editor_wireframe ? "on, game default" : "OFF");
+    return 1;
+}

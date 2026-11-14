@@ -102,6 +102,7 @@ static void read_config(const char *dir)
     g_cfg.narrow_balance      = GetPrivateProfileIntA("physics", "narrowphase_balance", 1, ini);
     g_cfg.compound_split      = GetPrivateProfileIntA("physics", "compound_split", 1, ini);
     g_cfg.gl_stats            = GetPrivateProfileIntA("profile", "gl_stats", 1, ini);
+    g_cfg.editor_wireframe    = GetPrivateProfileIntA("editor", "wireframe", 1, ini);
     if (g_cfg.narrow_threads > 32) g_cfg.narrow_threads = 32;
     g_cfg.phys_rate           = GetPrivateProfileIntA("physics", "rate", 0, ini);
     GetPrivateProfileStringA("physics", "budget_ms", "12", buf, sizeof buf, ini);
@@ -230,6 +231,7 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
     if (g_cfg.net_monitor) net_install();
     if (!is_server) branding_install();
     if (!is_server && g_cfg.fix_editor_mirror) editor_fix_install();
+    if (!is_server) editor_wire_install();
     if (!is_server && (g_cfg.overlay_vk || g_cfg.menu_vk)) overlay_install();
     if (!is_server && g_cfg.gl_stats) glstats_install();
     crashguard_stage("game-start");

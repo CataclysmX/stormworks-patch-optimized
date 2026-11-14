@@ -9,7 +9,7 @@ typedef struct {
     uint8_t *vt_dispatcher, *vt_hashed_cache, *vt_softrigid, *vt_discrete;
     uint8_t *vt_vehicle_tick, *vt_scene_update;
     uint8_t *vt_compound_algo, *vt_manifold_result;   /* compound split (compound.c) */
-    int narrow_hook_on, compound_split_on;            /* hooks installed this session (menu.c) */
+    int narrow_hook_on, compound_split_on, editor_wire_on;   /* hooks installed this session (menu.c) */
     uint8_t *step_simulation, *default_near;
     uint8_t *thread_enqueue, *task_wait, *task_set_state, *mtx_lock, *mtx_unlock, *cnd_broadcast;
     void *prof_start, *prof_stop;           /* Start_Profile(name) / Stop_Profile() */
@@ -61,6 +61,7 @@ typedef struct {
     int menu_vk;              /* settings menu key (VK code), 0 = no menu */
     int compound_split;       /* 1 = children of one big compound pair processed in parallel */
     int gl_stats;             /* 1 = count OpenGL calls per frame (overlay, log) */
+    int editor_wireframe;     /* 1 = the workbench's wireframe pass (game default), 0 = skipped */
 } stw_config;
 
 extern stw_config g_cfg;
@@ -127,6 +128,8 @@ int  sampler_install(void);
 int  net_install(void);
 int  branding_install(void);
 int  editor_fix_install(void);
+int  editor_wire_install(void);
+void editor_wire_apply(void);
 extern volatile ULONGLONG g_last_tick_ms;
 extern volatile DWORD g_tick_tid;     /* the game thread that ticks (waits on physics) */
 extern ULONGLONG g_start_ms;   /* GetTickCount64() when the DLL loaded */

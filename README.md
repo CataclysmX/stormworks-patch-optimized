@@ -243,6 +243,23 @@ SwapBuffers and OPENGL32 glDrawElements / glDrawArrays / glBindTexture through t
 glBindBuffer / glBindVertexArray / glVertexAttribPointer / glUseProgram through a hooked
 wglGetProcAddress (in place before the game creates its context).
 
+## Workbench: wireframe pass (`[editor] wireframe`)
+
+Sampler in the workbench (2026-11-14): main thread 71 % in OpenGL, top caller FUN_140680c00
+(31 %). It draws a mesh and, when its outline argument is set, draws it again with
+`glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)` (the game's only polygon-mode-line draw). The pass is
+guarded by `je short`; `wireframe=0` turns it into `jmp short` (one byte, same length), flipped
+live from the F4 menu, so its cost can be measured in F3 on a slow vehicle before deciding.
+
+## Physics Flooder (game component)
+
+`rom/data/definitions/physics_flooder.xml`: "Floods an enclosed volume with massless physics,
+allowing for physics shape optimisation": the voxel-to-box merging of the physics shape then
+covers the enclosed volume with a few large boxes instead of many thin wall boxes, so the
+vehicle's btCompoundShape has fewer children (cheaper collision pairs, see compound split), at
+the cost of a solid volume players cannot enter. The slow-pair diagnostic now prints the
+compound's shape count (`btCompoundShape::m_children.size()` at +0x24) to measure its effect.
+
 ## In-game "Performance Warning"
 
 Fixed thresholds in the game (FUN_1405e2xxx, 2026-10-29 build), checked when a vehicle loads, not

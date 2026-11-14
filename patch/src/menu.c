@@ -30,6 +30,7 @@ static const item_t items[] = {
     { "Itérations du solveur (0 = jeu)", M_INT, &g_cfg.solver_iterations, 0, 30, 1, "physics", "solver_iterations", 0 },
     { "Collisions : paires min. en parallèle", M_INT, &g_cfg.narrow_min_pairs, 16, 1024, 16, "physics", "narrowphase_min_pairs", 0 },
     { "Collisions : paires lourdes d'abord", M_BOOL, &g_cfg.narrow_balance, 0, 1, 1, "physics", "narrowphase_balance", 0 },
+    { "Atelier : contours fil de fer", M_BOOL, &g_cfg.editor_wireframe, 0, 1, 1, "editor", "wireframe", 0 },
     { "Rendre la mémoire à Windows (crashs)", M_BOOL, &g_cfg.alloc_purge, 0, 1, 1, "memory", "allocator_purge", 0 },
     { "Correctif suppression en symétrie", M_BOOL, &g_cfg.fix_editor_mirror, 0, 1, 1, "fixes", "editor_mirror_delete", 1 },
     { "Statistiques OpenGL", M_BOOL, &g_cfg.gl_stats, 0, 1, 1, "profile", "gl_stats", 1 },
@@ -56,6 +57,7 @@ static int needs_restart(const item_t *it)
     if (!strcmp(it->section, "fixes") && !strncmp(it->key, "unstick", 7)) return !g_addr.narrow_hook_on;
     if (!strncmp(it->key, "narrowphase_", 12)) return !g_addr.narrow_hook_on;
     if (it->value == &g_cfg.alloc_purge) return !g_cfg.fast_alloc;
+    if (it->value == &g_cfg.editor_wireframe) return !g_addr.editor_wire_on;
     return 0;
 }
 
@@ -97,6 +99,7 @@ void menu_line(int i, char *buf, size_t n, int *kind)
 
 static void apply(const item_t *it)
 {
+    if (it->value == &g_cfg.editor_wireframe) editor_wire_apply();
     if (it->value == &g_cfg.alloc_purge && g_cfg.fast_alloc)
         mi_option_set(mi_option_purge_delay, g_cfg.alloc_purge ? 10 : -1);
 }
