@@ -15,6 +15,7 @@
  *   4C 8D 47 01              lea  r8, [rdi+1]
  *   48 8D 15 rel32           lea  rdx, [" 64Bit"]           */
 #include "stwpatch.h"
+#include <stdio.h>
 #include <string.h>
 
 static int write_code(uint8_t *at, const void *src, size_t n)
