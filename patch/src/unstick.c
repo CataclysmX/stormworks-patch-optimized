@@ -141,9 +141,15 @@ void unstick_after_dispatch(void *disp)
     if (!g_cfg.unstick || !disp) return;
     int n = *(int *)((uint8_t *)disp + DISP_NUM_MANIFOLDS);
     uint8_t **mf = *(uint8_t ***)((uint8_t *)disp + DISP_MANIFOLDS);
-    if (n <= 0 || !mf) return;
     if (!TryAcquireSRWLockExclusive(&lock)) return;
     ULONGLONG now = GetTickCount64();
+    /* expiry first: a body without static contact for EXPIRE_MS gets its collision back before
+     * this pass looks at its new contacts (and even when there is no manifold at all) */
+    if (now - last_sweep > 250) {
+        last_sweep = now;
+        sweep(now);
+    }
+    if (n <= 0 || !mf) { ReleaseSRWLockExclusive(&lock); return; }
     uint32_t pass = ++pass_id;
     double up[3] = { g_world_up[0], g_world_up[1], g_world_up[2] };
     double depth_lim = -g_cfg.unstick_depth;
@@ -240,11 +246,6 @@ void unstick_after_dispatch(void *disp)
                 owned |= *(void **)(m + MF_POINTS + (size_t)p * MF_POINT_STRIDE + PT_USER_DATA) != NULL;
             if (!owned) *(int *)(m + MF_NUM_POINTS) = 0;   /* clearManifold without user data */
         }
-    }
-
-    if (now - last_sweep > 250) {
-        last_sweep = now;
-        sweep(now);
     }
     ReleaseSRWLockExclusive(&lock);
 }

@@ -29,5 +29,16 @@ build/opengl32.dll: $(SRC) src/stwpatch.h src/opengl32_forward.c src/opengl32_th
 	mkdir -p build
 	$(CC) $(CFLAGS) -o $@ $(SRC) build/mimalloc.o src/opengl32_forward.c src/opengl32_thunks.S src/opengl32.def $(LDFLAGS) $(LIBS)
 
+# tests: build/narrow_test.exe (run with wine), build/unstick_test (native Linux)
+tests: build/narrow_test.exe build/unstick_test
+
+build/narrow_test.exe: test/narrow_test.c src/narrowphase.c src/stwpatch.h
+	mkdir -p build
+	$(CC) -O2 -Wall -std=gnu11 -Isrc -I$(MI)/include -o $@ test/narrow_test.c
+
+build/unstick_test: test/unstick_test.c src/unstick.c src/stwpatch.h test/linux_shim/windows.h
+	mkdir -p build
+	gcc -O1 -Wall -Wextra -Itest/linux_shim -o $@ test/unstick_test.c
+
 clean:
 	rm -rf build
