@@ -58,6 +58,15 @@ typedef struct {
 } stw_config;
 
 extern stw_config g_cfg;
+
+/* Patch version: bump on every release. Shown with the build date after the suffix of the
+ * main-menu label ("Cata-ptimised v1.1 (14/11/26 09:45)") and in the log, so a glance tells
+ * whether the installed DLL is the latest build. */
+#define STWPATCH_VERSION "1.1"
+#ifndef STWPATCH_GIT
+#define STWPATCH_GIT "?"
+#endif
+const char *stwpatch_build(void);   /* "1.1 (14/11/26 09:45)" */
 extern uint8_t *g_base;
 extern const char *g_prefix;   /* "stwpatch" (client) or "stwpatch_server": output file names */
 

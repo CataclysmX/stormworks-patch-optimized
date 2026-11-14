@@ -33,10 +33,10 @@ int branding_install(void)
     size_t extra = strlen(suffix);
     if (!extra) return 0;
     char text[96];
-    size_t len = 6 + 1 + extra;                         /* " 64Bit" + ' ' + suffix */
+    /* " 64Bit " + suffix + " v1.1 (14/11/26 09:45)": the patch version and build date */
+    int n = snprintf(text, sizeof text, " 64Bit %s v%s", suffix, stwpatch_build());
+    size_t len = n > 0 ? (size_t)n : sizeof text;
     if (len + 2 > 127 || len >= sizeof text) { log_printf("branding: suffix too long"); return 0; }
-    memcpy(text, " 64Bit ", 7);
-    memcpy(text + 7, suffix, extra + 1);
 
     IMAGE_NT_HEADERS64 *nt = (IMAGE_NT_HEADERS64 *)(g_base + ((IMAGE_DOS_HEADER *)g_base)->e_lfanew);
     IMAGE_SECTION_HEADER *sec = IMAGE_FIRST_SECTION(nt), *text_s = NULL, *rdata = NULL;

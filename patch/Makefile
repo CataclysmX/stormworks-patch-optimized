@@ -9,6 +9,9 @@ MIFLAGS = -O2 -std=gnu11 -DNDEBUG -DMI_DEBUG=0 -DMI_SECURE=0 -DMI_STAT=0 -I$(MI)
 SRC = src/fastalloc.c src/dllmain.c src/vehicle_pool.c src/heap_track.c src/physics.c src/narrowphase.c src/crashguard.c src/resolver.c src/sampler.c src/net.c src/branding.c src/editor_fix.c src/unstick.c
 
 CFLAGS += -I$(MI)/include
+# commit of the sources, for the log ("-dirty": built from uncommitted changes)
+GIT_REV := $(shell git -C .. rev-parse --short HEAD 2>/dev/null)$(shell git -C .. diff --quiet HEAD -- patch 2>/dev/null || echo -dirty)
+CFLAGS += -DSTWPATCH_GIT='"$(GIT_REV)"'
 
 all: build/OpenAL64.dll build/opengl32.dll
 

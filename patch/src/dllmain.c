@@ -124,6 +124,20 @@ static void read_config(const char *dir)
     if (g_cfg.sampler_ms && g_cfg.sampler_ms < 2) g_cfg.sampler_ms = 2;
 }
 
+const char *stwpatch_build(void)
+{
+    /* __DATE__ "Nov 14 2026", __TIME__ "09:45:12": the build of this DLL (one compiler run) */
+    static char s[48];
+    if (!s[0]) {
+        static const char months[] = "JanFebMarAprMayJunJulAugSepOctNovDec";
+        const char *d = __DATE__, *t = __TIME__;
+        int m = 0;
+        for (int i = 0; i < 12; i++) if (!strncmp(months + 3 * i, d, 3)) m = i + 1;
+        snprintf(s, sizeof s, "%s (%02d/%02d/%.2s %.5s)", STWPATCH_VERSION, atoi(d + 4), m, d + 9, t);
+    }
+    return s;
+}
+
 static DWORD WINAPI late_init(LPVOID p)
 {
     (void)p;
@@ -174,7 +188,8 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
     g_start_ms = GetTickCount64();
     g_base = (uint8_t *)GetModuleHandleA(NULL);
     read_config(dir);
-    log_printf("stwpatch loaded in %s, image base %p, vehicle threads=%d, heap_track=%d",
+    log_printf("stwpatch v%s, git %s, loaded in %s, image base %p, vehicle threads=%d, heap_track=%d",
+               stwpatch_build(), STWPATCH_GIT,
                name, g_base, g_cfg.vehicle_threads, g_cfg.heap_track);
     if (crashguard_init(inst, dir)) return TRUE;
     crashguard_stage("resolve");
