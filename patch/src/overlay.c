@@ -269,11 +269,12 @@ static DWORD WINAPI overlay_thread(LPVOID arg)
             if (!game_wnd) continue;
         }
         int focused = game_focused();
-        /* hook presses, else bit 15 (down now) / bit 0 (pressed since the previous call) */
+        /* the hook's presses; without the hook, bit 15 (down now) / bit 0 (pressed since the
+         * previous call). Never both: one press would toggle twice (seen on 2026-11-14) */
         LONG presses = key_presses;
         SHORT ks = GetAsyncKeyState(g_cfg.overlay_vk);
         int down = (ks & 0x8000) != 0;
-        int pressed = presses != seen_presses || (down && !was_down) || (ks & 1);
+        int pressed = hook ? presses != seen_presses : (down && !was_down) || (ks & 1);
         seen_presses = presses;
         if (pressed && !focused && n_unfocused++ < 3) {
             HWND f = GetForegroundWindow();
