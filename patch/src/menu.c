@@ -24,7 +24,7 @@ typedef struct {
 #define AUTO_NARROW_THREADS  -1002
 
 static const item_t items[] = {
-    { "Roues / blocs coincés sous la map", M_BOOL, &g_cfg.unstick, 0, 1, 1, "fixes", "unstick", 0, 1 },
+    { "Roues / blocs coincés sous la map", M_BOOL, &g_cfg.unstick, 0, 1, 1, "fixes", "unstick_enabled", 0, 0 },
     { "   profondeur minimale (m)", M_DOUBLE, &g_cfg.unstick_depth, 0.05, 2, 0.05, "fixes", "unstick_depth", 0, 0.3 },
     { "   durée avant coupure (s)", M_DOUBLE, &g_cfg.unstick_seconds, 0.2, 10, 0.1, "fixes", "unstick_seconds", 0, 1 },
     { "   rayon maximal du bloc (m)", M_DOUBLE, &g_cfg.unstick_max_radius, 0.5, 30, 0.5, "fixes", "unstick_max_radius", 0, 3 },

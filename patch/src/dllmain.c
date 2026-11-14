@@ -117,7 +117,7 @@ static void read_config(const char *dir)
     g_cfg.safe_mode           = GetPrivateProfileIntA("misc", "safe_mode", 1, ini);
     g_cfg.sampler_ms          = GetPrivateProfileIntA("profile", "sampler_ms", 0, ini);
     g_cfg.fix_editor_mirror   = GetPrivateProfileIntA("fixes", "editor_mirror_delete", 1, ini);
-    g_cfg.unstick             = GetPrivateProfileIntA("fixes", "unstick", 1, ini);
+    g_cfg.unstick             = GetPrivateProfileIntA("fixes", "unstick_enabled", 0, ini);
     {   /* [misc] overlay_key = F1..F12 (default F3), empty or 0 = no overlay */
         char key[16];
         GetPrivateProfileStringA("misc", "overlay_key", "F3", key, sizeof key, ini);

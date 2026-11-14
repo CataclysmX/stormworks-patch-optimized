@@ -174,7 +174,7 @@ The server doesn't import OpenAL64 → the `steam_api64.dll` proxy (same code). 
   decommitted it. Same class as above: covered by `allocator_purge=0` (the Windows heap keeps such
   pages too). Who frees the handle too early is not identified (virtual calls; REA's Ghidra runs
   out of memory at 2 GB on this exe).
-* `unstick.c` (`[fixes] unstick=1`): game bug, with or without the patch: a wheel or block caught
+* `unstick.c` (`[fixes] unstick_enabled=0` by default since v1.2: false positives near the shore, see below; the key was renamed so that installs merging an older ini with `unstick=1` get it off): game bug, with or without the patch: a wheel or block caught
   under the terrain is pushed down by it while its vehicle pulls it up (jitter, many contacts).
   After each narrowphase, a dynamic body of radius ≤ `unstick_max_radius` (3 m: never a whole
   vehicle) pushed DOWN (contact normal against the gravity read from world+0x1e0) into static
