@@ -5,6 +5,7 @@
 #include <stdlib.h>
 
 stw_config g_cfg;
+char g_ini_path[MAX_PATH];
 uint8_t *g_base;
 const char *g_prefix = "stwpatch";
 ULONGLONG g_start_ms;
@@ -69,6 +70,7 @@ static void read_config(const char *dir)
 {
     char ini[MAX_PATH];
     snprintf(ini, sizeof ini, "%s\\stwpatch.ini", dir);
+    snprintf(g_ini_path, sizeof g_ini_path, "%s", ini);
     SYSTEM_INFO si;
     GetSystemInfo(&si);
     /* main thread + physics thread are already busy: give the rest, capped at 8 */
@@ -99,6 +101,7 @@ static void read_config(const char *dir)
     g_cfg.narrow_min_pairs    = GetPrivateProfileIntA("physics", "narrowphase_min_pairs", 64, ini);
     g_cfg.narrow_balance      = GetPrivateProfileIntA("physics", "narrowphase_balance", 1, ini);
     g_cfg.compound_split      = GetPrivateProfileIntA("physics", "compound_split", 1, ini);
+    g_cfg.gl_stats            = GetPrivateProfileIntA("profile", "gl_stats", 1, ini);
     if (g_cfg.narrow_threads > 32) g_cfg.narrow_threads = 32;
     g_cfg.phys_rate           = GetPrivateProfileIntA("physics", "rate", 0, ini);
     GetPrivateProfileStringA("physics", "budget_ms", "12", buf, sizeof buf, ini);
@@ -116,6 +119,9 @@ static void read_config(const char *dir)
         GetPrivateProfileStringA("misc", "overlay_key", "F3", key, sizeof key, ini);
         int fk = (key[0] == 'F' || key[0] == 'f') ? atoi(key + 1) : 0;
         g_cfg.overlay_vk = fk >= 1 && fk <= 12 ? VK_F1 + fk - 1 : 0;
+        GetPrivateProfileStringA("misc", "menu_key", "F4", key, sizeof key, ini);   /* settings menu */
+        fk = (key[0] == 'F' || key[0] == 'f') ? atoi(key + 1) : 0;
+        g_cfg.menu_vk = fk >= 1 && fk <= 12 ? VK_F1 + fk - 1 : 0;
     }
     GetPrivateProfileStringA("fixes", "unstick_depth", "0.3", buf, sizeof buf, ini);
     g_cfg.unstick_depth       = atof(buf) > 0.05 ? atof(buf) : 0.05;
@@ -224,7 +230,8 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
     if (g_cfg.net_monitor) net_install();
     if (!is_server) branding_install();
     if (!is_server && g_cfg.fix_editor_mirror) editor_fix_install();
-    if (!is_server && g_cfg.overlay_vk) overlay_install();
+    if (!is_server && (g_cfg.overlay_vk || g_cfg.menu_vk)) overlay_install();
+    if (!is_server && g_cfg.gl_stats) glstats_install();
     crashguard_stage("game-start");
     HANDLE h = CreateThread(NULL, 0, late_init, NULL, 0, NULL);
     if (h) CloseHandle(h);

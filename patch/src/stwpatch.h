@@ -9,6 +9,7 @@ typedef struct {
     uint8_t *vt_dispatcher, *vt_hashed_cache, *vt_softrigid, *vt_discrete;
     uint8_t *vt_vehicle_tick, *vt_scene_update;
     uint8_t *vt_compound_algo, *vt_manifold_result;   /* compound split (compound.c) */
+    int narrow_hook_on, compound_split_on;            /* hooks installed this session (menu.c) */
     uint8_t *step_simulation, *default_near;
     uint8_t *thread_enqueue, *task_wait, *task_set_state, *mtx_lock, *mtx_unlock, *cnd_broadcast;
     void *prof_start, *prof_stop;           /* Start_Profile(name) / Stop_Profile() */
@@ -57,10 +58,13 @@ typedef struct {
     int unstick;              /* 1 = drop static contacts of small bodies stuck under the terrain */
     double unstick_depth, unstick_seconds, unstick_max_radius;
     int overlay_vk;           /* debug overlay toggle key (VK code), 0 = no overlay */
+    int menu_vk;              /* settings menu key (VK code), 0 = no menu */
     int compound_split;       /* 1 = children of one big compound pair processed in parallel */
+    int gl_stats;             /* 1 = count OpenGL calls per frame (overlay, log) */
 } stw_config;
 
 extern stw_config g_cfg;
+extern char g_ini_path[MAX_PATH];   /* stwpatch.ini of this session (menu.c saves to it) */
 
 /* Patch version: bump on every release. Shown with the build date after the suffix of the
  * main-menu label ("Cata-ptimised v1.1 (14/11/26 09:45)") and in the log, so a glance tells
@@ -93,6 +97,18 @@ void net_live(int *players, long long *bytes_sent, long long *refused);
 extern char g_last_exception[192];
 int  overlay_install(void);
 int  compound_split_install(void);
+typedef struct {
+    long long frames, draws, binds, redundant, unbind, attrib, programs, textures;
+    double frame_ms;                                  /* cumulative */
+} gl_live_t;
+int  glstats_install(void);
+int  menu_item_count(void);
+int  menu_dirty(void);
+const char *menu_status(void);
+void menu_line(int i, char *buf, size_t n, int *kind);
+void menu_change(int i, int dir);
+void gl_live(gl_live_t *out);
+ULONGLONG *iat_find(const char *dll, const char *fn);
 int  compound_assist(void);
 void compound_format(char *buf, size_t size);
 extern uint8_t *g_base;

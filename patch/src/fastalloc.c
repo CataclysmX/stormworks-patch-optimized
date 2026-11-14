@@ -96,3 +96,6 @@ int fastalloc_install(void)
                g_cfg.alloc_purge ? "on" : "off: freed pages stay readable, like the Windows heap");
     return 1;
 }
+
+/* import table slot of dll!fn in the exe (shared with glstats.c) */
+ULONGLONG *iat_find(const char *dll, const char *fn) { return find_iat(dll, fn); }

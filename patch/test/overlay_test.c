@@ -2,8 +2,12 @@
  *   make tests && wine build/overlay_test.exe
  * then press F3 in that window (or: xdotool keydown F3; sleep 0.2; xdotool keyup F3). */
 #include "../src/overlay.c"
+#include "../src/menu.c"
 
 stw_config g_cfg;
+game_addrs g_addr;
+char g_ini_path[MAX_PATH];
+void mi_option_set(mi_option_t o, long v) { (void)o; (void)v; }
 char g_last_exception[192] = "09:44:13 0xc0000005 at stormworks64.exe+0x58b280 (read 0x5de749b6110)";
 
 void log_printf(const char *fmt, ...)
@@ -40,6 +44,12 @@ void narrowphase_live(narrow_live_t *o)
 }
 
 long long vehicle_pool_ticks(void) { return n * 35000; }
+void gl_live(gl_live_t *o)
+{
+    memset(o, 0, sizeof *o);
+    o->frames = n * 55; o->draws = n * 55 * 9000; o->binds = n * 55 * 36000;
+    o->redundant = n * 55 * 6000; o->unbind = n * 55 * 12000; o->textures = n * 55 * 4000; o->frame_ms = n * 55 * 18.0;
+}
 void net_live(int *p, long long *b, long long *r) { *p = 2; *b = n * 300 * 1024; *r = 0; }
 void unstick_format(char *buf, size_t size) { snprintf(buf, size, "0 bodies without static collision now, 1 unstuck, 1 restored (total)"); }
 void mi_process_info(size_t *a, size_t *b, size_t *c, size_t *rss, size_t *prss, size_t *commit, size_t *pcommit, size_t *f)
@@ -69,6 +79,11 @@ static LRESULT CALLBACK game_proc(HWND h, UINT msg, WPARAM wp, LPARAM lp)
 int main(void)
 {
     g_cfg.overlay_vk = VK_F3;
+    g_cfg.menu_vk = VK_F4;
+    g_cfg.unstick = 1; g_cfg.unstick_depth = 0.3; g_cfg.unstick_seconds = 1; g_cfg.unstick_max_radius = 3;
+    g_cfg.compound_split = 1; g_cfg.phys_budget_ms = 12; g_cfg.narrow_min_pairs = 64; g_cfg.narrow_balance = 1;
+    g_addr.narrow_hook_on = 1; g_addr.compound_split_on = 1;
+    GetFullPathNameA("build\\overlay_test.ini", MAX_PATH, g_ini_path, NULL);
     g_cfg.narrow_threads = 7;
     g_cfg.vehicle_threads = 8;
     g_cfg.unstick = 1;
@@ -76,6 +91,7 @@ int main(void)
     g_cfg.net_monitor = 1;
     g_cfg.fix_editor_mirror = 1;
     g_cfg.phys_rate = -1;
+    g_cfg.gl_stats = 1;
     WNDCLASSA wc;
     memset(&wc, 0, sizeof wc);
     wc.lpfnWndProc = game_proc;

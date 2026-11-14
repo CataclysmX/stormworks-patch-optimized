@@ -12,6 +12,7 @@ typedef void *HMODULE, *HANDLE, *LPVOID;
 typedef struct { void *p; } SRWLOCK;
 #define SRWLOCK_INIT { 0 }
 #define WINAPI
+#define MAX_PATH 260
 static inline int  TryAcquireSRWLockExclusive(SRWLOCK *l) { (void)l; return 1; }
 static inline void ReleaseSRWLockExclusive(SRWLOCK *l) { (void)l; }
 static inline void AcquireSRWLockShared(SRWLOCK *l) { (void)l; }

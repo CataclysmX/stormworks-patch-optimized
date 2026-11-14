@@ -138,7 +138,12 @@ static uint8_t *dynamic_side(uint8_t *m, double *sign)
 
 void unstick_after_dispatch(void *disp)
 {
-    if (!g_cfg.unstick || !disp) return;
+    static int was_on;
+    if (!g_cfg.unstick || !disp) { was_on = 0; return; }
+    if (!was_on) {                       /* (re)enabled from the F4 menu: forget old states */
+        was_on = 1;
+        if (TryAcquireSRWLockExclusive(&lock)) { memset(table, 0, sizeof table); ReleaseSRWLockExclusive(&lock); }
+    }
     int n = *(int *)((uint8_t *)disp + DISP_NUM_MANIFOLDS);
     uint8_t **mf = *(uint8_t ***)((uint8_t *)disp + DISP_MANIFOLDS);
     if (!TryAcquireSRWLockExclusive(&lock)) return;

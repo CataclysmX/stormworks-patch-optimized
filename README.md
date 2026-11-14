@@ -223,6 +223,26 @@ or inside a nested compound. `[physics] compound_split=1`; counts in the physics
 `test/compound_test.c` (wine): every child once, private result copies, caller's result intact,
 inline cases; ~69 % of 5000 children on 3 helpers.
 
+## Settings menu (F4) and OpenGL statistics
+
+`menu.c` + `overlay.c`, `[misc] menu_key=F4`: a second panel (top right) lists the settings;
+↑↓ select, ←→ change, Enter toggles or saves (`WritePrivateProfileString` into the session's
+stwpatch.ini). While it is open the low-level keyboard hook takes these keys (returns 1) as long
+as the game is in the foreground; under Proton raw input may still reach the game, hence the hint
+to open it while paused. Live: unstick and its thresholds (fresh state table when re-enabled),
+compound split (checked at every pair), physics rate / governor budget, solver iterations (0 now
+restores the game's value), narrowphase min pairs / balance, mimalloc purge
+(`mi_option_set(purge_delay)`). Marked `*` (next launch): editor fix, OpenGL stats, sampler,
+thread counts, or a live item whose hook is not installed this session. Tested in the Wine
+harness (`test/overlay_test.c` includes `menu.c`): navigation, live change, save.
+
+`glstats.c`, `[profile] gl_stats=1`: counts per frame (SwapBuffers) draws, buffer binds, binds
+that change nothing (same buffer, or a bind to 0 overwritten before any draw), attribute
+pointers, texture binds, programs; F3 line and stwpatch.log every 30 s. Counting only: GDI32
+SwapBuffers and OPENGL32 glDrawElements / glDrawArrays / glBindTexture through the import table,
+glBindBuffer / glBindVertexArray / glVertexAttribPointer / glUseProgram through a hooked
+wglGetProcAddress (in place before the game creates its context).
+
 ## In-game "Performance Warning"
 
 Fixed thresholds in the game (FUN_1405e2xxx, 2026-10-29 build), checked when a vehicle loads, not

@@ -7,7 +7,11 @@
  * mode on Windows (use borderless). The key comes from a low-level keyboard hook (the game reads
  * raw input: under Proton GetAsyncKeyState never sees its keys), with GetAsyncKeyState as a
  * fallback, and only counts while the game window is in the foreground; the panel hides itself
- * when the game loses the focus. */
+ * when the game loses the focus.
+ *
+ * F4 ([misc] menu_key) opens the settings menu (menu.c) in a second panel at the top right:
+ * up/down select, left/right change, Enter toggles or saves. While it is open these keys are
+ * taken by the hook (not passed on), as long as the game window is in the foreground. */
 #include "stwpatch.h"
 #include <psapi.h>
 #include <mimalloc.h>
@@ -18,22 +22,30 @@
 #define TICK_MS     40                  /* key polling: a tap lasts ~100 ms */
 #define DRAW_TICKS  6                   /* panel redrawn every 240 ms */
 #define STATS_TICKS 25                  /* figures recomputed every second */
-#define MAX_LINES   20
+#define MAX_LINES   28
 #define LINE_LEN    200
 #define PAD         8
 
-static HWND  game_wnd, panel;
-static HFONT font;
-static int   shown;
-static char  lines[MAX_LINES][LINE_LEN];
-static int   n_lines;
-static COLORREF line_color[MAX_LINES];
+typedef struct {
+    HWND wnd;
+    int right;                          /* anchored at the top right of the game (menu) */
+    char lines[MAX_LINES][LINE_LEN];    /* UTF-8 */
+    COLORREF color[MAX_LINES];
+    int n;
+} panel_t;
+
+static HWND    game_wnd;
+static HFONT   font;
+static int     shown, menu_open, menu_sel;
+static panel_t stats_p, menu_p = { .right = 1 };
+static panel_t *cur = &stats_p;         /* where add() writes */
 
 static BOOL CALLBACK find_game(HWND h, LPARAM lp)
 {
     DWORD pid;
     GetWindowThreadProcessId(h, &pid);
-    if (pid != GetCurrentProcessId() || h == panel || !IsWindowVisible(h) || GetWindow(h, GW_OWNER)) return TRUE;
+    if (pid != GetCurrentProcessId() || h == stats_p.wnd || h == menu_p.wnd || !IsWindowVisible(h) ||
+        GetWindow(h, GW_OWNER)) return TRUE;
     RECT r;
     GetClientRect(h, &r);
     LONG *best = (LONG *)lp;
@@ -44,12 +56,12 @@ static BOOL CALLBACK find_game(HWND h, LPARAM lp)
 
 static void add(COLORREF c, const char *fmt, ...)
 {
-    if (n_lines >= MAX_LINES) return;
+    if (cur->n >= MAX_LINES) return;
     va_list ap;
     va_start(ap, fmt);
-    vsnprintf(lines[n_lines], LINE_LEN, fmt, ap);
+    vsnprintf(cur->lines[cur->n], LINE_LEN, fmt, ap);
     va_end(ap);
-    line_color[n_lines++] = c;
+    cur->color[cur->n++] = c;
 }
 
 #define WHITE  RGB(235, 235, 235)
@@ -77,7 +89,8 @@ static void refresh_text(void)
     double sec = pt ? (now - pt) / 1000.0 : 0;
     if (sec <= 0) sec = 1;
 
-    n_lines = 0;
+    cur = &stats_p;
+    cur->n = 0;
     add(WHITE, "stwpatch v%s   git %s   [F%d: hide]", stwpatch_build(), STWPATCH_GIT, g_cfg.overlay_vk - VK_F1 + 1);
 
     long long ticks = p.ticks - pp.ticks, steps = p.steps - pp.steps;
@@ -117,6 +130,18 @@ static void refresh_text(void)
     }
     if (nl.slow_ms > 0 && now - nl.slow_at < 3000)
         add(nl.slow_ms > 3 ? RED : YELLOW, "  slow pair  %.2f ms: %s", nl.slow_ms, nl.slow_text);
+    if (g_cfg.gl_stats) {
+        static gl_live_t pg;
+        gl_live_t g;
+        gl_live(&g);
+        double f = (double)(g.frames - pg.frames);
+        if (pt && f > 0)
+            add(WHITE, "OpenGL       %.0f fps   %.0f draws/frame   %.0f buffer binds (%.0f%% removable)   %.0f texture binds",
+                f / sec, (g.draws - pg.draws) / f, (g.binds - pg.binds) / f,
+                g.binds > pg.binds ? 100.0 * ((g.redundant - pg.redundant) + (g.unbind - pg.unbind)) / (g.binds - pg.binds) : 0.0,
+                (g.textures - pg.textures) / f);
+        pg = g;
+    }
     if (g_cfg.vehicle_threads > 0)
         add(WHITE, "Vehicles     %d threads   %.0f body ticks/s", g_cfg.vehicle_threads, pt ? (veh - pv) / sec : 0.0);
     else
@@ -153,25 +178,34 @@ static void refresh_text(void)
     pt = now;
 }
 
-static void layout(void)
+static int widen(const char *utf8, wchar_t *out, int max)
+{
+    int n = MultiByteToWideChar(CP_UTF8, 0, utf8, -1, out, max);
+    return n > 0 ? n - 1 : 0;
+}
+
+static void layout(panel_t *p)
 {
     RECT gr;
     if (!game_wnd || !GetClientRect(game_wnd, &gr)) return;
     POINT o = { 0, 0 };
     ClientToScreen(game_wnd, &o);
-    HDC dc = GetDC(panel);
+    HDC dc = GetDC(p->wnd);
     HGDIOBJ old = SelectObject(dc, font);
     int w = 0, h = 0;
-    for (int i = 0; i < n_lines; i++) {
+    wchar_t wl[LINE_LEN];
+    for (int i = 0; i < p->n; i++) {
         SIZE s;
-        GetTextExtentPoint32A(dc, lines[i], (int)strlen(lines[i]), &s);
+        int len = widen(p->lines[i], wl, LINE_LEN);
+        GetTextExtentPoint32W(dc, wl, len, &s);
         if (s.cx > w) w = s.cx;
         h += s.cy;
     }
     SelectObject(dc, old);
-    ReleaseDC(panel, dc);
-    /* below the top-left corner, where overlays like MangoHud usually sit */
-    SetWindowPos(panel, HWND_TOPMOST, o.x + 12, o.y + (gr.bottom - gr.top) / 6, w + 2 * PAD, h + 2 * PAD,
+    ReleaseDC(p->wnd, dc);
+    int x = p->right ? o.x + (gr.right - gr.left) - (w + 2 * PAD) - 12 : o.x + 12;
+    /* stats below the top-left corner (where overlays like MangoHud sit), menu at the top right */
+    SetWindowPos(p->wnd, HWND_TOPMOST, x, o.y + (gr.bottom - gr.top) / 6, w + 2 * PAD, h + 2 * PAD,
                  SWP_NOACTIVATE | SWP_SHOWWINDOW);
 }
 
@@ -179,6 +213,7 @@ static LRESULT CALLBACK panel_proc(HWND h, UINT msg, WPARAM wp, LPARAM lp)
 {
     switch (msg) {
     case WM_PAINT: {
+        panel_t *p = (panel_t *)GetWindowLongPtrA(h, GWLP_USERDATA);
         PAINTSTRUCT ps;
         HDC dc = BeginPaint(h, &ps);
         RECT r;
@@ -189,11 +224,13 @@ static LRESULT CALLBACK panel_proc(HWND h, UINT msg, WPARAM wp, LPARAM lp)
         HGDIOBJ old = SelectObject(dc, font);
         SetBkMode(dc, TRANSPARENT);
         int y = PAD;
-        for (int i = 0; i < n_lines; i++) {
+        wchar_t wl[LINE_LEN];
+        for (int i = 0; p && i < p->n; i++) {
             SIZE s;
-            GetTextExtentPoint32A(dc, lines[i], (int)strlen(lines[i]), &s);
-            SetTextColor(dc, line_color[i]);
-            TextOutA(dc, PAD, y, lines[i], (int)strlen(lines[i]));
+            int len = widen(p->lines[i], wl, LINE_LEN);
+            GetTextExtentPoint32W(dc, wl, len, &s);
+            SetTextColor(dc, p->color[i]);
+            TextOutW(dc, PAD, y, wl, len);
             y += s.cy;
         }
         SelectObject(dc, old);
@@ -208,28 +245,80 @@ static LRESULT CALLBACK panel_proc(HWND h, UINT msg, WPARAM wp, LPARAM lp)
     return DefWindowProcA(h, msg, wp, lp);
 }
 
-static volatile LONG key_presses;      /* key-down events seen by the low-level hook */
-
-static LRESULT CALLBACK keyboard_ll(int code, WPARAM wp, LPARAM lp)
-{
-    static int down;
-    if (code == HC_ACTION) {
-        KBDLLHOOKSTRUCT *k = (KBDLLHOOKSTRUCT *)lp;
-        if ((int)k->vkCode == g_cfg.overlay_vk) {
-            int is_down = wp == WM_KEYDOWN || wp == WM_SYSKEYDOWN;
-            if (is_down && !down) InterlockedIncrement(&key_presses);   /* not the auto-repeat */
-            down = is_down;
-        }
-    }
-    return CallNextHookEx(NULL, code, wp, lp);
-}
+static volatile LONG key_presses;      /* overlay key-downs seen by the low-level hook */
+static volatile LONG menu_presses;     /* menu key-downs */
+static volatile LONG menu_shown;       /* the menu is on screen: navigation keys are ours */
+static volatile LONG q_head, q_tail;   /* navigation keys, hook -> overlay thread */
+static int q_keys[64];
 
 static int game_focused(void)
 {
     HWND f = GetForegroundWindow();
     DWORD pid = 0;
     if (f) GetWindowThreadProcessId(f, &pid);
-    return f && pid == GetCurrentProcessId() && f != panel;
+    return f && pid == GetCurrentProcessId() && f != stats_p.wnd && f != menu_p.wnd;
+}
+
+static LRESULT CALLBACK keyboard_ll(int code, WPARAM wp, LPARAM lp)
+{
+    static int down, menu_down;
+    if (code == HC_ACTION) {
+        KBDLLHOOKSTRUCT *k = (KBDLLHOOKSTRUCT *)lp;
+        int vk = (int)k->vkCode, is_down = wp == WM_KEYDOWN || wp == WM_SYSKEYDOWN;
+        if (vk == g_cfg.overlay_vk) {
+            if (is_down && !down) InterlockedIncrement(&key_presses);   /* not the auto-repeat */
+            down = is_down;
+        }
+        if (vk == g_cfg.menu_vk && !(k->flags & LLKHF_ALTDOWN)) {        /* never Alt+F4 */
+            if (is_down && !menu_down) InterlockedIncrement(&menu_presses);
+            menu_down = is_down;
+        }
+        if (menu_shown && (vk == VK_UP || vk == VK_DOWN || vk == VK_LEFT || vk == VK_RIGHT || vk == VK_RETURN) &&
+            game_focused()) {
+            LONG h = q_head;
+            if (is_down && h - q_tail < 64) {                            /* auto-repeat included */
+                q_keys[h & 63] = vk;
+                InterlockedExchange(&q_head, h + 1);
+            }
+            return 1;                                                    /* not passed on */
+        }
+    }
+    return CallNextHookEx(NULL, code, wp, lp);
+}
+
+static void render_menu(void)
+{
+    cur = &menu_p;
+    cur->n = 0;
+    char key[8];
+    snprintf(key, sizeof key, "F%d", g_cfg.menu_vk - VK_F1 + 1);
+    add(WHITE, "stwpatch v%s — réglages           [%s : fermer]", stwpatch_build(), key);
+    add(GREY, " ");
+    int n = menu_item_count();
+    for (int i = 0; i < n; i++) {
+        char line[160];
+        int kind;
+        menu_line(i, line, sizeof line, &kind);
+        COLORREF c = i == menu_sel ? YELLOW : kind == 1 ? GREY : kind == 2 ? GREEN : WHITE;
+        if (kind == 2) add(GREY, " ");
+        add(c, "%s %s", i == menu_sel ? ">" : " ", line);
+    }
+    add(GREY, " ");
+    if (menu_status()[0]) add(GREEN, "%s", menu_status());
+    add(GREY, "↑↓ choisir   ←→ régler   Entrée : basculer / valider   * = au prochain lancement");
+    add(GREY, "Dans un siège, ouvrez plutôt le menu en pause : les flèches pilotent aussi.");
+    cur = &stats_p;
+}
+
+static HWND make_panel(HINSTANCE inst, const char *cls, panel_t *p)
+{
+    HWND h = CreateWindowExA(WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
+                             cls, "stwpatch", WS_POPUP, 0, 0, 10, 10, NULL, NULL, inst, NULL);
+    if (!h) return NULL;
+    SetWindowLongPtrA(h, GWLP_USERDATA, (LONG_PTR)p);
+    SetLayeredWindowAttributes(h, 0, 215, LWA_ALPHA);
+    p->wnd = h;
+    return h;
 }
 
 static DWORD WINAPI overlay_thread(LPVOID arg)
@@ -243,22 +332,22 @@ static DWORD WINAPI overlay_thread(LPVOID arg)
     wc.lpszClassName = "stwpatch_overlay";
     wc.hCursor = LoadCursorA(NULL, (LPCSTR)IDC_ARROW);
     RegisterClassA(&wc);
-    panel = CreateWindowExA(WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
-                            wc.lpszClassName, "stwpatch", WS_POPUP, 0, 0, 10, 10, NULL, NULL, inst, NULL);
-    if (!panel) { log_printf("overlay: window creation failed (%lu)", GetLastError()); return 0; }
-    SetLayeredWindowAttributes(panel, 0, 215, LWA_ALPHA);
+    if (!make_panel(inst, wc.lpszClassName, &stats_p) || !make_panel(inst, wc.lpszClassName, &menu_p)) {
+        log_printf("overlay: window creation failed (%lu)", GetLastError());
+        return 0;
+    }
     font = CreateFontA(-15, 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
                        CLEARTYPE_QUALITY, FIXED_PITCH | FF_MODERN, "Consolas");
-    SetTimer(panel, 1, TICK_MS, NULL);
+    SetTimer(stats_p.wnd, 1, TICK_MS, NULL);
     HMODULE self = NULL;
     GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
                        (LPCSTR)keyboard_ll, &self);
     HHOOK hook = SetWindowsHookExA(WH_KEYBOARD_LL, keyboard_ll, self, 0);
-    log_printf("overlay: ready, toggle with F%d while the game has the focus (keyboard hook %s)",
-               g_cfg.overlay_vk - VK_F1 + 1, hook ? "on" : "FAILED, polling only");
+    log_printf("overlay: ready, F%d stats, F%d settings, while the game has the focus (keyboard hook %s)",
+               g_cfg.overlay_vk - VK_F1 + 1, g_cfg.menu_vk - VK_F1 + 1, hook ? "on" : "FAILED, polling only");
 
-    int was_down = 0, tick = 0, n_toggles = 0, n_unfocused = 0;
-    LONG seen_presses = 0;
+    int was_down = 0, tick = 0, n_toggles = 0, n_unfocused = 0, menu_was_open = 0;
+    LONG seen_presses = 0, seen_menu = 0;
     MSG m;
     while (GetMessageA(&m, NULL, 0, 0) > 0) {
         if (m.message != WM_TIMER) { TranslateMessage(&m); DispatchMessageA(&m); continue; }
@@ -272,11 +361,14 @@ static DWORD WINAPI overlay_thread(LPVOID arg)
         /* the hook's presses; without the hook, bit 15 (down now) / bit 0 (pressed since the
          * previous call). Never both: one press would toggle twice (seen on 2026-11-14) */
         LONG presses = key_presses;
-        SHORT ks = GetAsyncKeyState(g_cfg.overlay_vk);
+        SHORT ks = g_cfg.overlay_vk ? GetAsyncKeyState(g_cfg.overlay_vk) : 0;
         int down = (ks & 0x8000) != 0;
-        int pressed = hook ? presses != seen_presses : (down && !was_down) || (ks & 1);
+        int pressed = g_cfg.overlay_vk && (hook ? presses != seen_presses : (down && !was_down) || (ks & 1));
         seen_presses = presses;
-        if (pressed && !focused && n_unfocused++ < 3) {
+        LONG mp = menu_presses;
+        int menu_pressed = g_cfg.menu_vk && mp != seen_menu;
+        seen_menu = mp;
+        if ((pressed || menu_pressed) && !focused && n_unfocused++ < 3) {
             HWND f = GetForegroundWindow();
             DWORD pid = 0;
             if (f) GetWindowThreadProcessId(f, &pid);
@@ -292,15 +384,42 @@ static DWORD WINAPI overlay_thread(LPVOID arg)
                 log_printf("overlay: %s (game window %ldx%ld)", shown ? "shown" : "hidden", r.right, r.bottom);
             }
         }
+        if (menu_pressed && focused) menu_open = !menu_open;
         was_down = down;
+
+        /* menu: keys from the hook, redrawn at every tick while open */
+        InterlockedExchange(&menu_shown, menu_open && focused);
+        int changed = 0;
+        while (q_tail != q_head) {
+            int vk = q_keys[q_tail & 63];
+            InterlockedIncrement(&q_tail);
+            int n = menu_item_count();
+            if (vk == VK_UP) menu_sel = (menu_sel + n - 1) % n;
+            else if (vk == VK_DOWN) menu_sel = (menu_sel + 1) % n;
+            else menu_change(menu_sel, vk == VK_LEFT ? -1 : vk == VK_RIGHT ? 1 : 0);
+            changed = 1;
+        }
+        if (menu_open && focused) {
+            if (changed || !menu_was_open || tick % DRAW_TICKS == 0) {
+                render_menu();
+                layout(&menu_p);
+                InvalidateRect(menu_p.wnd, NULL, FALSE);
+            }
+            menu_was_open = 1;
+        } else {
+            menu_was_open = 0;
+            if (IsWindowVisible(menu_p.wnd)) ShowWindow(menu_p.wnd, SW_HIDE);
+        }
+
         if (!shown || !focused) {
-            if (IsWindowVisible(panel)) ShowWindow(panel, SW_HIDE);
+            if (IsWindowVisible(stats_p.wnd)) ShowWindow(stats_p.wnd, SW_HIDE);
+            tick++;
             continue;
         }
         if (tick % STATS_TICKS == 0) refresh_text();
         if (tick++ % DRAW_TICKS == 0) {
-            layout();
-            InvalidateRect(panel, NULL, FALSE);
+            layout(&stats_p);
+            InvalidateRect(stats_p.wnd, NULL, FALSE);
         }
     }
     return 0;

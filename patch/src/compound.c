@@ -174,7 +174,7 @@ static void run_serial(defer_t *d)
 
 static void hk_process(void *algo, void *w0, void *w1, void *info, void *result)
 {
-    defer_t *d = defer_get(1);
+    defer_t *d = g_cfg.compound_split ? defer_get(1) : NULL;   /* switched live from the F4 menu */
     if (!d || d->state != 0 || !result || *(void **)result != vt_result) {
         orig_process(algo, w0, w1, info, result);
         return;
@@ -303,6 +303,7 @@ int compound_split_install(void)
     if (!orig_child) return 0;
     patch_jump(child, sizeof child_prologue, hk_child);
     orig_process = (process_t)patch_ptr(&vt[1], hk_process);
+    g_addr.compound_split_on = 1;
     log_printf("compound split: on (processCollision rva 0x%llx, ProcessChildShape rva 0x%llx, from %d children)",
                (unsigned long long)((uint8_t *)orig_process - g_base), (unsigned long long)(child - g_base), MIN_CHILDREN);
     return 1;

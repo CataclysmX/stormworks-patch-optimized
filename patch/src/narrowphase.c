@@ -544,6 +544,7 @@ int narrowphase_install(void)
     cycles_per_ms = (double)(c1 - c0) / ((double)(q1.QuadPart - q0.QuadPart) * 1000.0 / f.QuadPart);
     if (g_cfg.narrow_threads <= 0) {       /* unstick only: just the dispatch slot */
         orig_dispatch = patch_ptr(&vt[7], hk_dispatch);
+        g_addr.narrow_hook_on = 1;
         log_printf("narrowphase: off (unstick hook only)");
         return 1;
     }
@@ -570,6 +571,7 @@ int narrowphase_install(void)
     orig_alloc            = patch_ptr(&vt[13], hk_alloc);
     orig_free             = patch_ptr(&vt[14], hk_free);
     orig_dispatch         = patch_ptr(&vt[7], hk_dispatch);
+    g_addr.narrow_hook_on = 1;
     log_printf("narrowphase: %d workers + physics thread, parallel from %d pairs",
                g_cfg.narrow_threads, g_cfg.narrow_min_pairs);
     return 1;

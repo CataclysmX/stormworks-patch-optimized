@@ -148,13 +148,17 @@ static uint8_t *thread_profile_root(void)
 static void apply_solver_knobs(uint8_t *world)
 {
     uint8_t *si = world + WORLD_SOLVER_INFO;
+    static int game_iterations;
+    static double game_residual;
     if (!logged_solver) {
         logged_solver = 1;
-        log_printf("physics: solver defaults: iterations=%d residual_threshold=%g",
-                   *(int *)(si + SI_NUM_ITERATIONS), *(double *)(si + SI_RESIDUAL));
+        game_iterations = *(int *)(si + SI_NUM_ITERATIONS);
+        game_residual = *(double *)(si + SI_RESIDUAL);
+        log_printf("physics: solver defaults: iterations=%d residual_threshold=%g", game_iterations, game_residual);
     }
-    if (g_cfg.solver_iterations > 0) *(int *)(si + SI_NUM_ITERATIONS) = g_cfg.solver_iterations;
-    if (g_cfg.solver_residual > 0) *(double *)(si + SI_RESIDUAL) = g_cfg.solver_residual;
+    /* 0 = the game's value, also when set back to 0 from the F4 menu */
+    *(int *)(si + SI_NUM_ITERATIONS) = g_cfg.solver_iterations > 0 ? g_cfg.solver_iterations : game_iterations;
+    *(double *)(si + SI_RESIDUAL) = g_cfg.solver_residual > 0 ? g_cfg.solver_residual : game_residual;
 }
 
 /* Physics rate. The game picks 180/120/60 Hz itself (0x140743916): it lowers the rate when the main
