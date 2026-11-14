@@ -4,7 +4,12 @@
  * main thread in ntdll during server start-up), and every tick allocates per-vehicle tasks.
  * The four heap imports are pointed at mimalloc (third_party/mimalloc, MIT, Microsoft).
  * Installed from DllMain, before the exe's CRT starts, so every CRT block comes from mimalloc;
- * a block mimalloc does not own (other heaps, anything allocated elsewhere) goes to the system. */
+ * a block mimalloc does not own (other heaps, anything allocated elsewhere) goes to the system.
+ *
+ * Purging is off: by default mimalloc decommits freed pages after 10 ms, and the game sometimes
+ * reads a block shortly after freeing it (crash 2026-11-08: main thread, read of a freed address
+ * in mimalloc's 2-6 TiB range). The Windows heap keeps freed small blocks committed, so the game
+ * never noticed; with purge_delay = -1 mimalloc does the same. */
 #include "stwpatch.h"
 #include <mimalloc.h>
 
@@ -81,11 +86,13 @@ int fastalloc_install(void)
     }
     process_heap = GetProcessHeap();
     mi_option_disable(mi_option_show_errors);
+    if (!g_cfg.alloc_purge) mi_option_set(mi_option_purge_delay, -1);
     /* free/size/realloc first: once alloc is switched, every new block is a mimalloc block */
     set_iat(ifr, fa_free, (void **)&real_free);
     set_iat(ir, fa_realloc, (void **)&real_realloc);
     set_iat(is, fa_size, (void **)&real_size);
     set_iat(ia, fa_alloc, (void **)&real_alloc);
-    log_printf("allocator: mimalloc %d installed for the CRT heap", mi_version());
+    log_printf("allocator: mimalloc %d installed for the CRT heap (purge %s)", mi_version(),
+               g_cfg.alloc_purge ? "on" : "off: freed pages stay readable, like the Windows heap");
     return 1;
 }

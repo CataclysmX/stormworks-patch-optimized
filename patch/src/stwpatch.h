@@ -34,6 +34,7 @@ typedef struct {
     int vehicle_thread_prio;  /* Win32 thread priority for pool workers */
     int heap_track;           /* 1 = allocation tracker (diagnostic, small overhead) */
     int fast_alloc;           /* 1 = mimalloc for the CRT heap */
+    int alloc_purge;          /* 1 = mimalloc returns freed pages to the OS (game reads freed memory) */
     int heap_sample;          /* 1 allocation out of N gets a call stack */
     int heap_report_sec;      /* report period */
     int timer_1ms;            /* timeBeginPeriod(1) */

@@ -81,6 +81,7 @@ static void read_config(const char *dir)
     char alloc[32];
     GetPrivateProfileStringA("memory", "allocator", "mimalloc", alloc, sizeof alloc, ini);
     g_cfg.fast_alloc          = _stricmp(alloc, "mimalloc") == 0;
+    g_cfg.alloc_purge         = GetPrivateProfileIntA("memory", "allocator_purge", 0, ini);
     g_cfg.heap_sample         = GetPrivateProfileIntA("memory", "sample", 64, ini);
     g_cfg.heap_report_sec     = GetPrivateProfileIntA("memory", "report_seconds", 60, ini);
     g_cfg.timer_1ms           = GetPrivateProfileIntA("misc", "timer_1ms", 1, ini);

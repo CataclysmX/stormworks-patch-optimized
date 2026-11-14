@@ -11,6 +11,7 @@
 #include "stwpatch.h"
 #include <stdio.h>
 #include <string.h>
+#include <mimalloc.h>
 
 static char marker_path[MAX_PATH];
 static volatile LONG logged;
@@ -60,7 +61,31 @@ static LONG CALLBACK veh(EXCEPTION_POINTERS *ep)
                  (unsigned long long)ep->ExceptionRecord->ExceptionInformation[1]);
     log_printf("EXCEPTION 0x%08lx at %s%s, thread %lu (first chance, may be handled by the game)",
                code, where, extra, GetCurrentThreadId());
-    log_printf("  rax=%llx rcx=%llx rdx=%llx r8=%llx r9=%llx rsp=%llx", c->Rax, c->Rcx, c->Rdx, c->R8, c->R9, c->Rsp);
+    if (code == EXCEPTION_ACCESS_VIOLATION && ep->ExceptionRecord->NumberParameters >= 2) {
+        /* freed (FREE / RESERVE) vs never valid; mimalloc region = a CRT heap block */
+        uintptr_t fa = (uintptr_t)ep->ExceptionRecord->ExceptionInformation[1];
+        MEMORY_BASIC_INFORMATION mbi;
+        const char *st = "?";
+        if (VirtualQuery((void *)fa, &mbi, sizeof mbi))
+            st = mbi.State == MEM_COMMIT ? "committed" : mbi.State == MEM_RESERVE ? "reserved (decommitted)" : "free (released)";
+        log_printf("  fault address: %s%s", st,
+                   g_cfg.fast_alloc && mi_is_in_heap_region((void *)fa) ? ", inside the mimalloc heap" : "");
+    }
+    log_printf("  rax=%llx rbx=%llx rcx=%llx rdx=%llx rsi=%llx rdi=%llx rbp=%llx rsp=%llx",
+               c->Rax, c->Rbx, c->Rcx, c->Rdx, c->Rsi, c->Rdi, c->Rbp, c->Rsp);
+    log_printf("  r8=%llx r9=%llx r10=%llx r11=%llx r12=%llx r13=%llx r14=%llx r15=%llx",
+               c->R8, c->R9, c->R10, c->R11, c->R12, c->R13, c->R14, c->R15);
+    {
+        /* code bytes around rip, so the instruction can be decoded without the exact exe */
+        MEMORY_BASIC_INFORMATION mbi;
+        uint8_t *ip = (uint8_t *)c->Rip;
+        if (VirtualQuery(ip - 16, &mbi, sizeof mbi) && mbi.State == MEM_COMMIT &&
+            (uint8_t *)mbi.BaseAddress + mbi.RegionSize >= ip + 16) {
+            char hex[32 * 3 + 1];
+            for (int i = 0; i < 32; i++) snprintf(hex + i * 3, 4, "%02x ", ip[i - 16]);
+            log_printf("  code[rip-16..+16] %s", hex);
+        }
+    }
     /* return addresses into the exe or into stwpatch, scanning the stack */
     if (code != EXCEPTION_STACK_OVERFLOW) {
         uintptr_t *sp = (uintptr_t *)c->Rsp;

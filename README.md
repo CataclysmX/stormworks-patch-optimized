@@ -144,7 +144,14 @@ The server doesn't import OpenAL64 → the `steam_api64.dll` proxy (same code). 
 ## Robustness
 * `crashguard.c`: an exception handler logs code, module+offset and the stack's return addresses
   into the log; `stwpatch.running` marks the startup stage. After a crash during startup, the next launch
-  runs in **safe mode** (no patches) and says so (`[misc] safe_mode=1`).
+  runs in **safe mode** (no patches) and says so (`[misc] safe_mode=1`). For an access violation it
+  also logs whether the faulting address is committed / decommitted / released and inside the
+  mimalloc heap, every general register, and the 32 code bytes around `rip`.
+* Allocator: crash of 2026-11-08 (build of 2026-10-29), main thread at `stormworks64.exe+0x7f9b73`,
+  read of `0x29a86510e18`: an address in mimalloc's 2-6 TiB range, i.e. the game read a heap block it
+  had already freed. mimalloc decommits freed pages after 10 ms (the Windows heap keeps them), so the
+  game's latent use-after-free became a crash. mimalloc now never purges (`[memory] allocator_purge=0`);
+  `allocator=system` turns mimalloc off entirely.
 * Windows: `dist/windows/` (`install.bat` / `uninstall.bat`, guards on DLL sizes) and `dist/stwpatch-windows.zip`.
 
 ## Multiplayer (in-game hosting): "slow" / "desynced" players
