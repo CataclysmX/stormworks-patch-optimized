@@ -22,6 +22,11 @@ top of `stwpatch.log`.
   - `[fixes] hang_guard=1`. Tested by `test/hang_guard_test.c` on byte-identical copies of both
     game sites.
 
+### Build
+- mimalloc is now a git submodule (`third_party/mimalloc`, v2.1.7). It was missing from the
+  repository, so a clone could not be built. Clone with `--recursive`, or run
+  `git submodule update --init`.
+
 ## [1.2.1] - 2026-11-15
 
 ### Fixed

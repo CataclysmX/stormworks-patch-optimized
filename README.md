@@ -329,11 +329,23 @@ and everything about lights and monitors (rendering).
 immediates + the `lea` of " 64Bit" redirected to a text placed in the tail of `.rdata`). The `"v1.15.23"` literal
 and its 11 other uses (multiplayer compatibility checks, saves, exports) are untouched.
 
+## Build
+
+mimalloc (v2.1.7) is a git submodule in `third_party/mimalloc`: clone with
+`git clone --recursive https://github.com/CataclysmX/stormworks-patch-optimized.git`, or run
+`git submodule update --init` in an existing clone. Then, with the mingw-w64 cross compiler
+(`x86_64-w64-mingw32-gcc`) and python3:
+
+```bash
+make -C patch all      # build/OpenAL64.dll (client) and build/opengl32.dll (server)
+make -C patch tests    # test programs (run the .exe ones with wine)
+```
+
 ## Usage
 
 ```bash
 ./install.sh install      # client: OpenAL64.dll proxy (+ stwpatch.ini)
-./install.sh install server   # + dedicated server: steam_api64.dll proxy
+./install.sh install server   # + dedicated server: opengl32.dll proxy (steam_api64.dll is never touched)
 ./install.sh status       # shows stwpatch.log
 ./install.sh uninstall    # restores the original
 python3 tools/stwmon.py 5 run.csv   # CPU per thread + RSS while you play

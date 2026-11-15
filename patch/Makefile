@@ -15,6 +15,11 @@ CFLAGS += -DSTWPATCH_GIT='"$(GIT_REV)"'
 
 all: build/OpenAL64.dll build/opengl32.dll
 
+$(MI)/src/static.c:
+	@echo "mimalloc is missing in third_party/mimalloc (a git submodule):"
+	@echo "  run  git submodule update --init  (or clone with --recursive)"
+	@exit 1
+
 build/mimalloc.o: $(MI)/src/static.c
 	mkdir -p build
 	$(CC) $(MIFLAGS) -c -o $@ $<
