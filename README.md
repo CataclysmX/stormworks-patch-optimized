@@ -341,6 +341,21 @@ make -C patch all      # build/OpenAL64.dll (client) and build/opengl32.dll (ser
 make -C patch tests    # test programs (run the .exe ones with wine)
 ```
 
+## Releases
+
+`.github/workflows/release.yml` runs on GitHub when a tag `vX.Y.Z` is pushed:
+1. checks that the tag, `STWPATCH_VERSION` (`patch/src/stwpatch.h`) and a `## [X.Y.Z]`
+   section of `CHANGELOG.md` agree;
+2. builds both DLLs with Ubuntu's mingw-w64;
+3. runs the tests that need no desktop or OpenGL (`unstick_test` natively; `narrow_test`,
+   `compound_test`, `hang_guard_test` and `sampler_test` with wine);
+4. packages `stwpatch-windows.zip` (+ `.sha256`);
+5. publishes a release whose notes are that CHANGELOG section.
+
+To release: bump the version and the changelog, commit, then
+`git push && git tag vX.Y.Z && git push origin vX.Y.Z`. A manual run ("Run workflow" in the
+Actions tab) does the same without publishing and keeps the zip as an artifact of the run.
+
 ## Usage
 
 ```bash

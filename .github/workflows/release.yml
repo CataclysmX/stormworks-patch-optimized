@@ -1,0 +1,101 @@
+# Automatic release: pushing a tag "vX.Y.Z" builds the DLLs, runs the tests, packages
+# stwpatch-windows.zip and publishes a GitHub release with the CHANGELOG.md section of that
+# version as its notes.
+#   1. set STWPATCH_VERSION in patch/src/stwpatch.h and add "## [X.Y.Z]" to CHANGELOG.md
+#   2. git commit, then  git tag vX.Y.Z && git push && git push origin vX.Y.Z
+# "Run workflow" (manual run, no tag) does the same without publishing: the zip is kept as an
+# artifact of the run.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write          # create the release
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    env:
+      WINEDEBUG: -all
+      WINEDLLOVERRIDES: "mscoree,mshtml="   # no Mono / Gecko installer prompt in the headless prefix
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true                  # third_party/mimalloc
+
+      - name: Toolchain (mingw-w64, wine for the tests)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc-mingw-w64-x86-64 zip wine wine64
+          x86_64-w64-mingw32-gcc --version | head -1
+          wine --version
+
+      - name: Version, tag and changelog agree
+        id: version
+        run: |
+          v=$(sed -n 's/^#define STWPATCH_VERSION "\(.*\)"/\1/p' patch/src/stwpatch.h)
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          if [ "${GITHUB_REF_TYPE}" = tag ] && [ "v$v" != "${GITHUB_REF_NAME}" ]; then
+            echo "::error::tag ${GITHUB_REF_NAME} but STWPATCH_VERSION is $v (patch/src/stwpatch.h)"; exit 1
+          fi
+          if ! grep -q "^## \[$v\]" CHANGELOG.md; then
+            echo "::error::no '## [$v]' section in CHANGELOG.md"; exit 1
+          fi
+
+      - name: Build
+        run: make -C patch all
+
+      - name: Tests
+        shell: bash                         # explicit: -eo pipefail, a failing test fails the step
+        run: |
+          make -C patch build/unstick_test build/narrow_test.exe build/compound_test.exe \
+                        build/sampler_test.exe build/hang_guard_test.exe
+          cd patch/build
+          ./unstick_test | tail -1
+          wineboot -i >/dev/null 2>&1 || true
+          # console tests only: glfilter_test needs an OpenGL context, overlay_test a desktop
+          for t in narrow_test compound_test hang_guard_test sampler_test; do
+            echo "== $t"
+            timeout 300 wine ./$t.exe | tail -3
+          done
+
+      - name: Package
+        run: |
+          mkdir -p out/windows
+          cp dist/windows/install.bat dist/windows/uninstall.bat dist/windows/merge_ini.ps1 \
+             dist/windows/LISEZMOI.txt dist/windows/stwpatch.ini out/windows/
+          cp patch/build/OpenAL64.dll out/windows/stwpatch_OpenAL64.dll
+          cp patch/build/opengl32.dll out/windows/stwpatch_opengl32.dll
+          (cd out && zip -qr ../stwpatch-windows.zip windows)
+          sha256sum stwpatch-windows.zip > stwpatch-windows.zip.sha256
+          unzip -l stwpatch-windows.zip
+
+      - name: Release notes (CHANGELOG.md section)
+        run: |
+          awk -v v="${{ steps.version.outputs.version }}" '
+            index($0, "## [" v "]") == 1 { on = 1; next }
+            on && /^## \[/ { exit }
+            on && /^\[[^]]*\]: / { exit }
+            on { print }' CHANGELOG.md > notes.md
+          printf '\n---\nInstall: extract `stwpatch-windows.zip` anywhere and run `install.bat` (Windows), or build from source and run `./install.sh install` (Linux / Proton). See README.md.\n' >> notes.md
+          cat notes.md
+
+      - name: Publish the release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" stwpatch-windows.zip stwpatch-windows.zip.sha256 \
+            --title "stwpatch ${GITHUB_REF_NAME}" --notes-file notes.md --verify-tag
+
+      - name: Keep the package (manual run)
+        if: github.ref_type != 'tag'
+        uses: actions/upload-artifact@v4
+        with:
+          name: stwpatch-windows
+          path: |
+            stwpatch-windows.zip
+            stwpatch-windows.zip.sha256
