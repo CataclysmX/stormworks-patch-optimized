@@ -121,6 +121,7 @@ static void read_config(const char *dir)
     g_cfg.safe_mode           = GetPrivateProfileIntA("misc", "safe_mode", 1, ini);
     g_cfg.sampler_ms          = GetPrivateProfileIntA("profile", "sampler_ms", 0, ini);
     g_cfg.fix_editor_mirror   = GetPrivateProfileIntA("fixes", "editor_mirror_delete", 1, ini);
+    g_cfg.hang_guard          = GetPrivateProfileIntA("fixes", "hang_guard", 1, ini);
     g_cfg.unstick             = GetPrivateProfileIntA("fixes", "unstick_enabled", 0, ini);
     {   /* [misc] overlay_key = F1..F12 (default F3), empty or 0 = no overlay */
         char key[16];
@@ -287,6 +288,7 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
     if (g_cfg.net_monitor) net_install();
     if (!is_server) branding_install();
     if (!is_server && g_cfg.fix_editor_mirror) editor_fix_install();
+    if (g_cfg.hang_guard) hang_guard_install();          /* client and server: patterns checked */
     if (!is_server) editor_wire_install();
     if (!is_server && (g_cfg.overlay_vk || g_cfg.menu_vk)) overlay_install();
     if (!is_server) glstats_install();                  /* frame limiter, OpenGL statistics */

@@ -5,6 +5,23 @@ server64.exe), loaded as a proxy `OpenAL64.dll` (client) or `opengl32.dll` (dedi
 The version is shown in the main-menu label (`v1.15.x 64Bit Cata-ptimised v1.2 (date)`) and at the
 top of `stwpatch.log`.
 
+## [1.2.2] - 2026-11-15
+
+### Fixed
+- **Game freeze on a stale interface object** (game bug, also without the patch:
+  `crash_15_11_cata`, frozen after ~4 h). An interface list of 16 numbered lines
+  ("N: name" / "N: empty", refreshed ~60 times per second on the main thread) pointed to an
+  object that had already been freed. Its name length read 3.86 billion, so the game scanned
+  ~3.9 GB of memory, then its buffer-growing function looped forever: it doubles a 32-bit
+  capacity, which overflows to 0 above 2^31.
+  - Lines whose object is unreadable, or whose name is absurdly long, are now shown as empty
+    (the game's own branch).
+  - A buffer request above 2^31 (which the game could never satisfy) now writes a clear line
+    in `stwpatch.log` and stops the game with an exception, so the crash reporter writes its
+    dump at once instead of leaving a frozen game.
+  - `[fixes] hang_guard=1`. Tested by `test/hang_guard_test.c` on byte-identical copies of both
+    game sites.
+
 ## [1.2.1] - 2026-11-15
 
 ### Fixed
@@ -127,7 +144,8 @@ First release.
 - Still single-threaded in the game: Bullet's constraint solver, most of the vehicle logic,
   Lua scripts, rendering.
 
-[1.2.1]: https://github.com/CataclysmX/stormworks-patch-optimized/compare/cd2b9b8...HEAD
+[1.2.2]: https://github.com/CataclysmX/stormworks-patch-optimized/compare/04f1da3...HEAD
+[1.2.1]: https://github.com/CataclysmX/stormworks-patch-optimized/compare/cd2b9b8...04f1da3
 [1.2]: https://github.com/CataclysmX/stormworks-patch-optimized/compare/0b6b308...cd2b9b8
 [1.1]: https://github.com/CataclysmX/stormworks-patch-optimized/compare/Realese...0b6b308
 [1.0]: https://github.com/CataclysmX/stormworks-patch-optimized/releases/tag/Realese

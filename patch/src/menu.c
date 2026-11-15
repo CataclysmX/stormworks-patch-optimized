@@ -39,6 +39,7 @@ static const item_t items[] = {
     { "Atelier : contours fil de fer", M_BOOL, &g_cfg.editor_wireframe, 0, 1, 1, "editor", "wireframe", 0, 1 },
     { "Rendre la mémoire à Windows (crashs)", M_BOOL, &g_cfg.alloc_purge, 0, 1, 1, "memory", "allocator_purge", 0, 0 },
     { "Correctif suppression en symétrie", M_BOOL, &g_cfg.fix_editor_mirror, 0, 1, 1, "fixes", "editor_mirror_delete", 1, 1 },
+    { "Anti-gel (objet d'interface périmé)", M_BOOL, &g_cfg.hang_guard, 0, 1, 1, "fixes", "hang_guard", 1, 1 },
     { "Statistiques OpenGL", M_BOOL, &g_cfg.gl_stats, 0, 1, 1, "profile", "gl_stats", 1, 1 },
     { "Échantillonneur (ms, 0 = off)", M_INT, &g_cfg.sampler_ms, 0, 20, 1, "profile", "sampler_ms", 1, 0 },
     { "Threads véhicules (0 = jeu)", M_INT, &g_cfg.vehicle_threads, 0, 64, 1, "vehicle", "threads", 1, AUTO_VEHICLE_THREADS },

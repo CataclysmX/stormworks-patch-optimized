@@ -55,6 +55,7 @@ typedef struct {
     int sampler_ms;           /* 0 = off; sampling period of the loading profiler */
     int safe_mode;            /* 1 = after a crash during startup, next launch runs unpatched */
     int fix_editor_mirror;    /* 1 = fix the editor's use-after-free when deleting with symmetry */
+    int hang_guard;           /* 1 = stale UI list objects shown empty, no endless loop on huge buffer requests */
     int unstick;              /* 1 = drop static contacts of small bodies stuck under the terrain */
     double unstick_depth, unstick_seconds, unstick_max_radius;
     int overlay_vk;           /* debug overlay toggle key (VK code), 0 = no overlay */
@@ -72,7 +73,7 @@ extern char g_ini_path[MAX_PATH];   /* stwpatch.ini of this session (menu.c save
 /* Patch version: bump on every release. Shown with the build date after the suffix of the
  * main-menu label ("Cata-ptimised v1.1 (14/11/26 09:45)") and in the log, so a glance tells
  * whether the installed DLL is the latest build. */
-#define STWPATCH_VERSION "1.2.1"
+#define STWPATCH_VERSION "1.2.2"
 #ifndef STWPATCH_GIT
 #define STWPATCH_GIT "?"
 #endif
@@ -131,6 +132,7 @@ int  sampler_install(void);
 int  net_install(void);
 int  branding_install(void);
 int  editor_fix_install(void);
+int  hang_guard_install(void);
 int  editor_wire_install(void);
 void editor_wire_apply(void);
 extern volatile ULONGLONG g_last_tick_ms;

@@ -155,6 +155,21 @@ The server doesn't import OpenAL64 → the `steam_api64.dll` proxy (same code). 
   the end of the committed region holding the stack; the sampler unwinds under a guard (its own
   first vectored handler resumes an access violation of the sampler thread at an escape that
   drops the sample; `test/sampler_test.c` runs a thread whose rsp is in reserved memory).
+* Hang guard (`hang_guard.c`, `[fixes] hang_guard=1`, 1.2.2), game bug, freeze of 2026-11-15
+  after ~4 h (`crash_dump/crash_15_11_cata_traite`).
+  - **Where it froze.** FUN_14028cb40 (main thread, ~60 Hz) refreshes a 16-line UI list
+    ("N: name" / "N: empty", 3 bars). It pointed to a stale object whose name length read
+    0xE625AAA6. FUN_14028cf80 (basename) scanned ~3.9 GB, then FUN_14017ca10, the game's buffer
+    reserve ("32, doubled while below the request", 32-bit), looped forever: the capacity
+    overflows to 0 above 2^31. The game's hang detector then raised 0x80000101.
+  - **Guard 1**, at the line's "object == NULL → empty" test (`+0x28cbc6`): an object that is
+    unreadable, whose name is over 64 KiB long or whose name / +0x10 chain is unreadable
+    (VirtualQuery) takes the empty branch. r14 is rewritten there before any read.
+  - **Guard 2**, in the reserve (`+0x17ca1a`): a request above 2^31 (endless in the original,
+    and no caller could use the buffer) logs the size and the caller, then raises 0xE0571E01,
+    so the crash reporter dumps at once. Requests up to 2^31 are unchanged.
+  - Both sites are found by byte pattern and patched independently (the server may lack the
+    UI list). `test/hang_guard_test.c` rebuilds both sites byte for byte and checks every case.
 * Memory (1.2.1): every 60 s the log gets a `memory:` line (private memory and its growth,
   working set, mimalloc commit / peak / thread heaps, system RAM and commit, threads, handles,
   GDI objects, GL thunks). Added after a friend's game ran a 64 GB machine out of memory on

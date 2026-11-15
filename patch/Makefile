@@ -6,7 +6,7 @@ LIBS    = -lpsapi -lkernel32 -ladvapi32 -lbcrypt -luser32 -lgdi32
 MI      = ../third_party/mimalloc
 MIFLAGS = -O2 -std=gnu11 -DNDEBUG -DMI_DEBUG=0 -DMI_SECURE=0 -DMI_STAT=0 -I$(MI)/include -w
 
-SRC = src/fastalloc.c src/dllmain.c src/vehicle_pool.c src/heap_track.c src/physics.c src/narrowphase.c src/crashguard.c src/resolver.c src/sampler.c src/net.c src/branding.c src/editor_fix.c src/unstick.c src/overlay.c src/compound.c src/glstats.c src/menu.c
+SRC = src/fastalloc.c src/dllmain.c src/vehicle_pool.c src/heap_track.c src/physics.c src/narrowphase.c src/crashguard.c src/resolver.c src/sampler.c src/net.c src/branding.c src/editor_fix.c src/unstick.c src/overlay.c src/compound.c src/glstats.c src/menu.c src/hang_guard.c
 
 CFLAGS += -I$(MI)/include
 # commit of the sources, for the log ("-dirty": built from uncommitted changes)
@@ -33,11 +33,15 @@ build/opengl32.dll: $(SRC) src/stwpatch.h src/opengl32_forward.c src/opengl32_th
 	$(CC) $(CFLAGS) -o $@ $(SRC) build/mimalloc.o src/opengl32_forward.c src/opengl32_thunks.S src/opengl32.def $(LDFLAGS) $(LIBS)
 
 # tests: build/narrow_test.exe (run with wine), build/unstick_test (native Linux)
-tests: build/narrow_test.exe build/unstick_test build/overlay_test.exe build/compound_test.exe build/glfilter_test.exe build/sampler_test.exe
+tests: build/narrow_test.exe build/unstick_test build/overlay_test.exe build/compound_test.exe build/glfilter_test.exe build/sampler_test.exe build/hang_guard_test.exe
 
 build/sampler_test.exe: test/sampler_test.c src/sampler.c src/stwpatch.h
 	mkdir -p build
 	$(CC) -O2 -Wall -std=gnu11 -Isrc -I$(MI)/include -o $@ test/sampler_test.c -lpsapi
+
+build/hang_guard_test.exe: test/hang_guard_test.c src/hang_guard.c src/stwpatch.h
+	mkdir -p build
+	$(CC) -O2 -Wall -std=gnu11 -Isrc -I$(MI)/include -o $@ test/hang_guard_test.c
 
 build/glfilter_test.exe: test/glfilter_test.c src/glstats.c src/stwpatch.h
 	mkdir -p build
