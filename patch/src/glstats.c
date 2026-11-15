@@ -244,12 +244,36 @@ static uint8_t *thunk_pool;
 static int      thunk_used, thunk_failed;
 static SRWLOCK  thunk_lock = SRWLOCK_INIT;     /* wglGetProcAddress may be called from several threads */
 
+/* one thunk per (real function, wrapper): the game may look its GL functions up again (new
+ * context, menu, ...); before 1.2.1 every lookup made a new 128-byte thunk, never freed */
+#define THUNK_CACHE 8192                        /* power of two; > the ~2000 GL functions of a driver */
+typedef struct { void *real; void (*fn)(void); void *thunk; } thunk_entry_t;
+static thunk_entry_t thunk_cache[THUNK_CACHE];
+static volatile LONG thunk_distinct, thunk_requests;
+
+static thunk_entry_t *thunk_slot(void *real, void (*fn)(void))   /* under thunk_lock */
+{
+    uint64_t h = ((uint64_t)(uintptr_t)real ^ ((uint64_t)(uintptr_t)fn << 1)) * 0x9E3779B97F4A7C15ull;
+    for (uint32_t n = 0, i = (uint32_t)(h >> 40) & (THUNK_CACHE - 1); n < THUNK_CACHE; n++, i = (i + 1) & (THUNK_CACHE - 1))
+        if (!thunk_cache[i].real || (thunk_cache[i].real == real && thunk_cache[i].fn == fn)) return &thunk_cache[i];
+    return NULL;                                /* full: thunks are still made, just not shared */
+}
+
+void glstats_thunks(long *distinct, long *requests) { *distinct = thunk_distinct; *requests = thunk_requests; }
+
 static uint8_t *put64(uint8_t *p, uint64_t v) { memcpy(p, &v, 8); return p + 8; }
 
 /* always = 1: no fast path (the thunk must run its call even with nothing pending) */
 static void *make_thunk(void *real, void (*fn)(void), int always)
 {
+    InterlockedIncrement(&thunk_requests);
     AcquireSRWLockExclusive(&thunk_lock);
+    thunk_entry_t *slot = thunk_slot(real, fn);
+    if (slot && slot->real) {                  /* this function already has its thunk */
+        void *t = slot->thunk;
+        ReleaseSRWLockExclusive(&thunk_lock);
+        return t;
+    }
     if (!thunk_pool || thunk_used + THUNK_SIZE > THUNK_BLOCK) {
         thunk_pool = VirtualAlloc(NULL, THUNK_BLOCK, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
         thunk_used = 0;
@@ -257,7 +281,7 @@ static void *make_thunk(void *real, void (*fn)(void), int always)
     }
     uint8_t *t = thunk_pool + thunk_used, *p = t;
     thunk_used += THUNK_SIZE;
-    ReleaseSRWLockExclusive(&thunk_lock);
+    thunk_distinct++;
     if (!always) {
         *p++ = 0x48; *p++ = 0xB8; p = put64(p, (uint64_t)(uintptr_t)&pending_any);   /* mov rax, &pending_any */
         *p++ = 0x83; *p++ = 0x38; *p++ = 0x00;                                         /* cmp dword [rax], 0 */
@@ -282,6 +306,8 @@ static void *make_thunk(void *real, void (*fn)(void), int always)
     *p++ = 0x48; *p++ = 0xB8; p = put64(p, (uint64_t)(uintptr_t)real);               /* mov rax, real */
     *p++ = 0xFF; *p++ = 0xE0;                                                          /* jmp rax */
     FlushInstructionCache(GetCurrentProcess(), t, THUNK_SIZE);
+    if (slot) { slot->fn = fn; slot->thunk = t; slot->real = real; }   /* shared once complete */
+    ReleaseSRWLockExclusive(&thunk_lock);
     return t;
 }
 

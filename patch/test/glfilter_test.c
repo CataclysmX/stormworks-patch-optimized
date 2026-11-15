@@ -213,10 +213,27 @@ int main(void)
     expect("  filter off: all sent", t2.elided - t1.elided, 0);
     expect("no GL error", glGetError(), 0);
 
+    /* looking a function up again reuses its thunk (before 1.2.1 each lookup leaked 128 bytes) */
+    long d0, r0, d1, r1;
+    glstats_thunks(&d0, &r0);
+    gen_t g = (gen_t)wglGetProcAddress("glGenBuffers"), g1 = g;
+    int same = 1;
+    for (int i = 0; i < 6000; i++) { g1 = (gen_t)wglGetProcAddress("glGenBuffers"); if (g1 != g) same = 0; }
+    glstats_thunks(&d1, &r1);
+    printf("  6001 lookups of glGenBuffers: %ld new thunk(s), %ld lookups counted\n", d1 - d0, r1 - r0);
+    expect("6001 lookups of one function: the same thunk every time", same, 1);
+    expect("  at most one thunk made for them", d1 - d0 <= 1, 1);
     /* the game asks wglGetProcAddress for thousands of functions: the thunk pool must grow */
-    gen_t g = NULL;
-    for (int i = 0; i < 6000; i++) g = (gen_t)wglGetProcAddress("glGenBuffers");
-    expect("6000 more wrapped functions: filter still available", g_addr.gl_filter_on && g_cfg.gl_filter, 1);
+    int distinct_ok = 1;
+    void *prev = NULL;
+    for (int i = 0; i < 6000; i++) {
+        void *t = make_thunk((void *)(uintptr_t)(0x10000 + 16 * i), filter_flush, 0);  /* never called */
+        if (!t || t == prev) distinct_ok = 0;
+        prev = t;
+    }
+    glstats_thunks(&d1, &r1);
+    expect("6000 distinct functions: 6000 thunks, pool grown past 256 KB", distinct_ok && d1 - d0 >= 6000, 1);
+    expect("  filter still available", g_addr.gl_filter_on && g_cfg.gl_filter, 1);
     unsigned extra = 0;
     bind_buffer(GL_ARRAY_BUFFER, A); bind_buffer(GL_ARRAY_BUFFER, 0);          /* pending, then a late thunk */
     g(1, &extra);

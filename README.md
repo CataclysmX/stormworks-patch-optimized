@@ -155,6 +155,11 @@ The server doesn't import OpenAL64 → the `steam_api64.dll` proxy (same code). 
   the end of the committed region holding the stack; the sampler unwinds under a guard (its own
   first vectored handler resumes an access violation of the sampler thread at an escape that
   drops the sample; `test/sampler_test.c` runs a thread whose rsp is in reserved memory).
+* Memory (1.2.1): every 60 s the log gets a `memory:` line (private memory and its growth,
+  working set, mimalloc commit / peak / thread heaps, system RAM and commit, threads, handles,
+  GDI objects, GL thunks). Added after a friend's game ran a 64 GB machine out of memory on
+  2026-11-15 with nothing in the log to tell where it went. Fixed at the same time: the
+  OpenGL filter made a new 128-byte thunk at every lookup of a GL function (now one per function).
 * Allocator: crash of 2026-11-08 (build of 2026-10-29), main thread at `stormworks64.exe+0x7f9b73`,
   read of `0x29a86510e18`: an address in mimalloc's 2-6 TiB range, i.e. the game read a heap block it
   had already freed. mimalloc decommits freed pages after 10 ms (the Windows heap keeps them), so the

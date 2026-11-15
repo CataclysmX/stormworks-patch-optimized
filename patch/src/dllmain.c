@@ -3,6 +3,10 @@
 #include <stdarg.h>
 #include <string.h>
 #include <stdlib.h>
+#include <psapi.h>
+#include <mimalloc.h>
+#include <tlhelp32.h>
+size_t _mi_current_thread_count(void);   /* mimalloc internal: threads with a heap */
 
 stw_config g_cfg;
 char g_ini_path[MAX_PATH];
@@ -167,6 +171,54 @@ static DWORD WINAPI late_init(LPVOID p)
     return 0;
 }
 
+/* every 60 s: process and system memory in the log, so that a leak or an out-of-memory end
+ * shows in stwpatch.log (2026-11-15: a friend's game died after "a memory leak" and the log had
+ * no memory figure at all). Growth is given since the last line and since the first one. */
+static DWORD WINAPI memory_monitor(LPVOID arg)
+{
+    (void)arg;
+    double first = -1, last = 0;
+    for (;;) {
+        Sleep(60000);
+        PROCESS_MEMORY_COUNTERS_EX pm;
+        memset(&pm, 0, sizeof pm);
+        if (!GetProcessMemoryInfo(GetCurrentProcess(), (PROCESS_MEMORY_COUNTERS *)&pm, sizeof pm)) continue;
+        double priv = pm.PrivateUsage / 1048576.0;
+        if (first < 0) first = last = priv;
+        char heap[128] = "Windows heap";
+        if (g_cfg.fast_alloc && !g_cfg.heap_track) {
+            size_t rss, peak_rss, commit, peak_commit;
+            mi_process_info(NULL, NULL, NULL, &rss, &peak_rss, &commit, &peak_commit, NULL);
+            snprintf(heap, sizeof heap, "mimalloc commit %.0f MB (peak %.0f), purge %s, %zu thread heaps",
+                     commit / 1048576.0, peak_commit / 1048576.0, g_cfg.alloc_purge ? "on" : "off",
+                     _mi_current_thread_count());
+        }
+        int threads = 0;
+        HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+        if (snap != INVALID_HANDLE_VALUE) {
+            THREADENTRY32 te = { .dwSize = sizeof te };
+            for (BOOL ok = Thread32First(snap, &te); ok; ok = Thread32Next(snap, &te))
+                if (te.th32OwnerProcessID == GetCurrentProcessId()) threads++;
+            CloseHandle(snap);
+        }
+        MEMORYSTATUSEX ms = { .dwLength = sizeof ms };
+        GlobalMemoryStatusEx(&ms);
+        DWORD handles = 0;
+        GetProcessHandleCount(GetCurrentProcess(), &handles);
+        long thunks = 0, lookups = 0;
+        glstats_thunks(&thunks, &lookups);
+        log_printf("memory: private %.0f MB (%+.0f since last, %+.0f since the first line), working set %.0f MB, %s; "
+                   "system: RAM free %.1f of %.1f GB, commit %.1f of %.1f GB; %d threads, %lu handles, %lu GDI objects; "
+                   "GL thunks %ld (%ld lookups)",
+                   priv, priv - last, priv - first, pm.WorkingSetSize / 1048576.0, heap,
+                   ms.ullAvailPhys / 1073741824.0, ms.ullTotalPhys / 1073741824.0,
+                   (ms.ullTotalPageFile - ms.ullAvailPageFile) / 1073741824.0, ms.ullTotalPageFile / 1073741824.0,
+                   threads, handles, GetGuiResources(GetCurrentProcess(), GR_GDIOBJECTS), thunks, lookups);
+        last = priv;
+    }
+    return 0;
+}
+
 BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
 {
     if (reason == DLL_PROCESS_DETACH) {
@@ -240,6 +292,8 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
     if (!is_server) glstats_install();                  /* frame limiter, OpenGL statistics */
     crashguard_stage("game-start");
     HANDLE h = CreateThread(NULL, 0, late_init, NULL, 0, NULL);
+    if (h) CloseHandle(h);
+    h = CreateThread(NULL, 0, memory_monitor, NULL, 0, NULL);
     if (h) CloseHandle(h);
     return TRUE;
 }

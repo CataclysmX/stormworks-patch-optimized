@@ -5,6 +5,21 @@ server64.exe), loaded as a proxy `OpenAL64.dll` (client) or `opengl32.dll` (dedi
 The version is shown in the main-menu label (`v1.15.x 64Bit Cata-ptimised v1.2 (date)`) and at the
 top of `stwpatch.log`.
 
+## [1.2.1] - 2026-11-15
+
+### Fixed
+- OpenGL filter: each time the game looked up a GL function again, the patch made a new
+  128-byte thunk for it and never freed it. One thunk per function now. This is far too small
+  to explain a whole machine running out of memory (that case is still being investigated, see
+  below), but it was unbounded.
+
+### Added
+- **Memory line in `stwpatch.log` every 60 s**, to find out where memory goes when it grows:
+  - private memory and its growth since the last line and since the first one;
+  - working set, mimalloc commit (peak) and number of thread heaps;
+  - system RAM free / total and commit / limit;
+  - threads, handles, GDI objects, GL thunks.
+
 ## [1.2] - 2026-11-14
 
 ### Fixed
@@ -112,6 +127,7 @@ First release.
 - Still single-threaded in the game: Bullet's constraint solver, most of the vehicle logic,
   Lua scripts, rendering.
 
+[1.2.1]: https://github.com/CataclysmX/stormworks-patch-optimized/compare/cd2b9b8...HEAD
 [1.2]: https://github.com/CataclysmX/stormworks-patch-optimized/compare/0b6b308...cd2b9b8
 [1.1]: https://github.com/CataclysmX/stormworks-patch-optimized/compare/Realese...0b6b308
 [1.0]: https://github.com/CataclysmX/stormworks-patch-optimized/releases/tag/Realese
